@@ -1,9 +1,17 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from supabase import create_client, Client
 import os
 
 app = Flask(__name__)
-CORS(app)  # allow requests from your frontend
+CORS(app)
+
+# Get Supabase credentials from environment
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+
+# Initialize Supabase client
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 @app.route('/signup', methods=['POST'])
 def signup():
@@ -14,13 +22,18 @@ def signup():
     phone = data.get('phone')
     password = data.get('password')
 
-    print("New Signup:")
-    print("Business:", business_name)
-    print("Email:", email)
-    print("Phone:", phone)
-    print("Password:", password)
+    # Insert into Supabase 'users' table
+    try:
+        response = supabase.table('users').insert({
+            "business_name": business_name,
+            "email": email,
+            "phone": phone,
+            "password": password  # For production, you should hash this
+        }).execute()
 
-    return jsonify({"message": "Account created successfully!"})
+        return jsonify({"message": "Account created successfully!"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
