@@ -3,5 +3,10 @@ services:
     name: trustpay-backend
     env: python
     plan: free
-    buildCommand: ""
+    buildCommand: pip install -r requirements.txt
     startCommand: python main.py
+    envVars:
+      - key: SUPABASE_URL
+        fromEnvVar: SUPABASE_URL
+      - key: SUPABASE_KEY
+        fromEnvVar: SUPABASE_KEY
