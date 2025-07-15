@@ -1,3 +1,5 @@
+
+import bcrypt
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from supabase import create_client, Client
@@ -21,7 +23,8 @@ def signup():
     business_name = data.get('businessName')
     email = data.get('email')
     phone = data.get('phone')
-    password = data.get('password')
+    raw_password = data.get('password')
+    hashed_password = bcrypt.hashpw(raw_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
     # Insert into Supabase 'users' table
     try:
@@ -30,7 +33,7 @@ def signup():
             "business_name": business_name,
             "email": email,
             "phone": phone,
-            "password": password  # Remember to hash this later for security
+            "password": hashed_password 
         }).execute()
         
         return jsonify({"message": "Account created successfully!"}), 200
