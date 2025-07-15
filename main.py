@@ -66,6 +66,28 @@ def login():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/add-product', methods=['POST'])
+def add_product():
+    data = request.get_json()
+
+    user_id = data.get('user_id')  # UUID from the logged-in user
+    product_name = data.get('product_name')
+    amount = data.get('amount')
+
+    if not all([user_id, product_name, amount]):
+        return jsonify({"error": "Missing fields"}), 400
+
+    try:
+        response = supabase.table('products').insert({
+            "user_id": user_id,
+            "product_name": product_name,
+            "amount": amount
+        }).execute()
+
+        return jsonify({"message": "Product added successfully!"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
