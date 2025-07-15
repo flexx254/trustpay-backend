@@ -40,6 +40,33 @@ def signup():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/login', methods=['POST'])
+def login():
+    data = request.get_json()
+    email = data.get('email')
+    password = data.get('password')
+
+    try:
+        # Find user by email
+        response = supabase.table('users').select('*').eq('email', email).execute()
+        users = response.data
+
+        if not users:
+            return jsonify({"error": "Invalid email or password."}), 401
+
+        user = users[0]
+        stored_hash = user['password']
+
+        # Check password using bcrypt
+        if bcrypt.checkpw(password.encode('utf-8'), stored_hash.encode('utf-8')):
+            return jsonify({"message": f"Welcome, {user['full_name']}!"}), 200
+        else:
+            return jsonify({"error": "Invalid email or password."}), 401
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
     app.run(debug=False, host='0.0.0.0', port=port)
