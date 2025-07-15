@@ -17,6 +17,7 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 def signup():
     data = request.get_json()
 
+    full_name = data.get('fullName')
     business_name = data.get('businessName')
     email = data.get('email')
     phone = data.get('phone')
@@ -25,12 +26,13 @@ def signup():
     # Insert into Supabase 'users' table
     try:
         response = supabase.table('users').insert({
+            "full_name": full_name,
             "business_name": business_name,
             "email": email,
             "phone": phone,
-            "password": password  # For production, you should hash this
+            "password": password  # Remember to hash this later for security
         }).execute()
-
+        
         return jsonify({"message": "Account created successfully!"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
