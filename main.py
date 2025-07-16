@@ -111,6 +111,22 @@ def get_products():
         return jsonify(response.data), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@app.route('/product-details', methods=['GET'])
+def product_details():
+    product_id = request.args.get('product_id')
+    if not product_id:
+        return jsonify({"error": "Product ID is required"}), 400
+
+    try:
+        response = supabase.table('products').select('*').eq('id', product_id).single().execute()
+        if response.data:
+            return jsonify(response.data), 200
+        else:
+            return jsonify({"error": "Product not found"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
     app.run(debug=False, host='0.0.0.0', port=port)
