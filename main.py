@@ -93,6 +93,24 @@ def add_product():
         return jsonify({"error": str(e)}), 500
 
 
+
+@app.route('/products', methods=['GET'])
+def get_products():
+    user_id = request.args.get('user_id')
+    
+    if not user_id:
+        return jsonify({"error": "User ID is required"}), 400
+
+    try:
+        response = supabase.table('products') \
+            .select('*') \
+            .eq('user_id', user_id) \
+            .order('id', desc=True) \
+            .execute()
+        
+        return jsonify(response.data), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
     app.run(debug=False, host='0.0.0.0', port=port)
