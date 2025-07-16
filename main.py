@@ -59,7 +59,11 @@ def login():
 
         # Check password using bcrypt
         if bcrypt.checkpw(password.encode('utf-8'), stored_hash.encode('utf-8')):
-            return jsonify({"message": f"Welcome, {user['full_name']}!"}), 200
+            return jsonify({
+        "message": f"Welcome, {user['full_name']}!",
+        "user_id": user['id'],  # UUID
+        "full_name": user['full_name']
+    }), 200
         else:
             return jsonify({"error": "Invalid email or password."}), 401
 
