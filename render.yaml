@@ -10,3 +10,16 @@ services:
         fromEnvVar: SUPABASE_URL
       - key: SUPABASE_KEY
         fromEnvVar: SUPABASE_KEY
+
+
+  - type: worker
+    name: trustpay-hoax
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python hoax.py
+    envVars:
+      - key: SUPABASE_URL
+        fromEnvVar: SUPABASE_URL
+      - key: SUPABASE_KEY
+        fromEnvVar: SUPABASE_KEY
