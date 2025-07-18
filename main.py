@@ -112,22 +112,25 @@ def product_details():
         return jsonify({"error": str(e)}), 500
 
 # ✅ FIXED: correctly placed update-payment route
+
 @app.route('/update-payment', methods=['POST'])
 def update_payment():
     data = request.get_json()
     product_id = data.get('product_id')
     buyer_name = data.get('buyer_name')
     buyer_email = data.get('buyer_email')
+    mpesa_number = data.get('mpesa_number')  # ✅ NEW
     status = data.get('status', 'held')
     paid = True
 
-    if not all([product_id, buyer_name, buyer_email]):
+    if not all([product_id, buyer_name, buyer_email, mpesa_number]):
         return jsonify({"error": "Missing fields"}), 400
 
     try:
         response = supabase.table('products').update({
             "buyer_name": buyer_name,
             "buyer_email": buyer_email,
+            "mpesa_number": mpesa_number,  # ✅ NEW
             "status": status,
             "paid": paid
         }).eq('id', product_id).execute()
@@ -135,7 +138,6 @@ def update_payment():
         return jsonify({"message": "Payment updated"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
     app.run(debug=False, host='0.0.0.0', port=port)
