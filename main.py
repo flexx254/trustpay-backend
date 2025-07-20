@@ -147,7 +147,7 @@ def receive_sms():
     time = data.get("time")
 
     try:
-        response = supabase.table('mpesa_messages').insert({
+        response = supabase.table('sms_messages').insert({
             "message": message,
             "phone": phone,
             "time": time
