@@ -144,17 +144,16 @@ def update_payment():
 def receive_sms():
     data = request.get_json()
     message = data.get("message")
-    phone = data.get("phone")
-    time = data.get("time")  # optional
+
+    if not message:
+        return jsonify({"error": "No message provided"}), 400
 
     try:
         response = supabase.table('sms_messages').insert({
-            "message": message,
-            "phone_number": phone,
-            "timestamp": time  # optional; omit this if you want default server time
+            "message": message
         }).execute()
 
-        return jsonify({"status": "M-PESA SMS stored"}), 200
+        return jsonify({"status": "SMS stored"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
                             
