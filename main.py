@@ -139,25 +139,24 @@ def update_payment():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 @app.route('/sms', methods=['POST'])
 def receive_sms():
     data = request.get_json()
     message = data.get("message")
     phone = data.get("phone")
-    time = data.get("time")
+    time = data.get("time")  # optional
 
     try:
         response = supabase.table('sms_messages').insert({
             "message": message,
-            "phone": phone,
-            "time": time
+            "phone_number": phone,
+            "timestamp": time  # optional; omit this if you want default server time
         }).execute()
 
         return jsonify({"status": "M-PESA SMS stored"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-
                             
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
