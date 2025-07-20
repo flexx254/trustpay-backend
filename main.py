@@ -138,6 +138,27 @@ def update_payment():
         return jsonify({"message": "Payment updated"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route('/sms', methods=['POST'])
+def receive_sms():
+    data = request.get_json()
+    message = data.get("message")
+    phone = data.get("phone")
+    time = data.get("time")
+
+    try:
+        response = supabase.table('mpesa_messages').insert({
+            "message": message,
+            "phone": phone,
+            "time": time
+        }).execute()
+
+        return jsonify({"status": "M-PESA SMS stored"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+                            
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
     app.run(debug=False, host='0.0.0.0', port=port)
