@@ -3,6 +3,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from supabase import create_client, Client
 import os
+import re
 
 app = Flask(__name__)
 CORS(app)
@@ -156,6 +157,50 @@ def receive_sms():
         return jsonify({"status": "SMS stored"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+import re
+
+@app.route('/check-payment', methods=['POST'])
+def check_payment():
+    data = request.get_json()
+    product_id = data.get("product_id")
+
+    if not product_id:
+        return jsonify({"error": "Product ID is required"}), 400
+
+    try:
+        # Step 1: Get the product and its mpesa_number
+        product_res = supabase.table("products").select("*").eq("id", product_id).single().execute()
+        product = product_res.data
+
+        if not product:
+            return jsonify({"error": "Product not found"}), 404
+
+        buyer_mpesa_number = product.get("mpesa_number")
+        if not buyer_mpesa_number:
+            return jsonify({"error": "No mpesa_number found for product"}), 400
+
+        # Step 2: Search recent messages
+        messages_res = supabase.table("sms_messages").select("*").order("id", desc=True).limit(20).execute()
+        messages = messages_res.data
+
+        # Step 3: Extract phone numbers from each message and compare
+        def extract_phone(message):
+            match = re.search(r'\+?\d{10,15}', message)
+            return match.group() if match else None
+
+        for sms in messages:
+            phone_in_sms = extract_phone(sms.get("message", ""))
+            if phone_in_sms and phone_in_sms.strip() == buyer_mpesa_number.strip():
+                return jsonify({"match": True, "message": "Payment confirmed."}), 200
+
+        # If no match
+        return jsonify({"match": False, "message": "Payment not yet detected."}), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
                             
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
