@@ -159,45 +159,45 @@ def receive_sms():
 
 
 
-@app.route('/check-payment', methods=['POST'])
+@app.route("/check-payment", methods=["POST"])
 def check_payment():
     data = request.get_json()
-    product_id = data.get("product_id")
+    buyer_mpesa_number = data.get("buyer_mpesa_number")
 
-    if not product_id:
-        return jsonify({"error": "Product ID is required"}), 400
+    # Normalize number formats
+    def normalize_number(number):
+        number = number.strip().replace(" ", "").replace("+", "")
+        if number.startswith("0") and len(number) == 10:
+            return "254" + number[1:]
+        elif number.startswith("254") and len(number) == 12:
+            return number
+        elif number.startswith("7") and len(number) == 9:
+            return "254" + number
+        return number
 
-    try:
-        # Step 1: Get the product and its mpesa_number
-        product_res = supabase.table("products").select("*").eq("id", product_id).single().execute()
-        product = product_res.data
+    # Extract phone number from SMS message
+    def extract_phone(message):
+        match = re.search(r'from.*?(\d{9,12})', message, re.IGNORECASE)
+        if match:
+            return match.group(1)
+        return None
 
-        if not product:
-            return jsonify({"error": "Product not found"}), 404
+    # Get all SMS messages from database
+    sms_response = supabase.table("sms_messages").select("*").execute()
+    if sms_response.error:
+        return jsonify({"success": False, "error": sms_response.error.message}), 500
 
-        buyer_mpesa_number = product.get("mpesa_number")
-        if not buyer_mpesa_number:
-            return jsonify({"error": "No mpesa_number found for product"}), 400
+    sms_messages = sms_response.data
 
-        # Step 2: Search recent messages
-        messages_res = supabase.table("sms_messages").select("*").order("id", desc=True).limit(20).execute()
-        messages = messages_res.data
+    for sms in sms_messages:
+        message = sms.get("message", "")
+        phone_in_sms = extract_phone(message)
 
-        # Step 3: Extract phone numbers from each message and compare
-        def extract_phone(message):
-            match = re.search(r'\+?\d{10,15}', message)
-            return match.group() if match else None
+        if phone_in_sms and normalize_number(phone_in_sms) == normalize_number(buyer_mpesa_number):
+            if "confirmed" in message.lower():
+                return jsonify({"success": True})
 
-        for sms in messages:
-            phone_in_sms = extract_phone(sms.get("message", ""))
-            if phone_in_sms and phone_in_sms.strip() == buyer_mpesa_number.strip():
-                return jsonify({"match": True, "message": "Payment confirmed."}), 200
-
-        # If no match
-        return jsonify({"match": False, "message": "Payment not yet detected."}), 200
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    return jsonify({"success": False})
 
 
                             
