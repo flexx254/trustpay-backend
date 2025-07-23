@@ -114,14 +114,14 @@ def product_details():
 
 # ✅ FIXED: correctly placed update-payment route
 
+
 @app.route('/update-payment', methods=['POST'])
 def update_payment():
     data = request.get_json()
     product_id = data.get('product_id')
     buyer_name = data.get('buyer_name')
     buyer_email = data.get('buyer_email')
-    mpesa_number = data.get('mpesa_number')  # ✅ NEW
-    status = data.get('status', 'held')
+    mpesa_number = data.get('mpesa_number')
     paid = True
 
     if not all([product_id, buyer_name, buyer_email, mpesa_number]):
@@ -131,8 +131,7 @@ def update_payment():
         response = supabase.table('products').update({
             "buyer_name": buyer_name,
             "buyer_email": buyer_email,
-            "mpesa_number": mpesa_number,  # ✅ NEW
-            "status": status,
+            "mpesa_number": mpesa_number,
             "paid": paid
         }).eq('id', product_id).execute()
 
@@ -158,7 +157,7 @@ def receive_sms():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-import re
+
 
 @app.route('/check-payment', methods=['POST'])
 def check_payment():
