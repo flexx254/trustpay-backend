@@ -115,13 +115,24 @@ def product_details():
 # ✅ FIXED: correctly placed update-payment route
 
 
+def normalize_number(number):
+    number = number.strip().replace(" ", "").replace("+", "")
+    if number.startswith("0") and len(number) == 10:
+        return "254" + number[1:]
+    elif number.startswith("254") and len(number) == 12:
+        return number
+    elif number.startswith("7") and len(number) == 9:
+        return "254" + number
+    return number
+
 @app.route('/update-payment', methods=['POST'])
 def update_payment():
     data = request.get_json()
     product_id = data.get('product_id')
     buyer_name = data.get('buyer_name')
     buyer_email = data.get('buyer_email')
-    mpesa_number = data.get('mpesa_number')
+    mpesa_number_raw = data.get('mpesa_number')
+    mpesa_number = normalize_number(mpesa_number_raw)
     paid = True
 
     if not all([product_id, buyer_name, buyer_email, mpesa_number]):
@@ -164,16 +175,7 @@ def check_payment():
     data = request.get_json()
     buyer_mpesa_number = data.get("buyer_mpesa_number")
 
-    # Normalize number formats
-    def normalize_number(number):
-        number = number.strip().replace(" ", "").replace("+", "")
-        if number.startswith("0") and len(number) == 10:
-            return "254" + number[1:]
-        elif number.startswith("254") and len(number) == 12:
-            return number
-        elif number.startswith("7") and len(number) == 9:
-            return "254" + number
-        return number
+
 
     # Extract phone number from SMS message
     def extract_phone(message):
