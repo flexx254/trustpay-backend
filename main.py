@@ -203,7 +203,7 @@ def check_payment():
 
         # Check if there's a matching incoming message
         message_response = (
-            supabase.table("incoming_messages")
+            supabase.table("sms_messages")
             .select("*")
             .like("message", f"%{normalized_number[-9:]}%")  # match last 9 digits
             .execute()
