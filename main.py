@@ -124,32 +124,35 @@ def normalize_number(number):
     elif number.startswith("7") and len(number) == 9:
         return "254" + number
     return number
-
 @app.route('/update-payment', methods=['POST'])
 def update_payment():
     data = request.get_json()
     product_id = data.get('product_id')
     buyer_name = data.get('buyer_name')
     buyer_email = data.get('buyer_email')
-    mpesa_number_raw = data.get('mpesa_number')
-    mpesa_number = normalize_number(mpesa_number_raw)
-    paid = True
+    mpesa_number = data.get('mpesa_number')
 
-    if not all([product_id, buyer_name, buyer_email, mpesa_number]):
-        return jsonify({"error": "Missing fields"}), 400
+    if not product_id or not mpesa_number:
+        return jsonify({"message": "Missing product ID or phone number"}), 400
+
+    # Normalize the number before saving
+    mpesa_number = normalize_number(mpesa_number)
 
     try:
         response = supabase.table('products').update({
             "buyer_name": buyer_name,
             "buyer_email": buyer_email,
             "mpesa_number": mpesa_number,
-            "paid": paid
+            "paid": False  # ✅ Set payment as false until SMS is confirmed
         }).eq('id', product_id).execute()
 
-        return jsonify({"message": "Payment updated"}), 200
+        if response.data:
+            return jsonify({"message": "Payment info updated. Waiting for confirmation."}), 200
+        else:
+            return jsonify({"message": "No product found with that ID"}), 404
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
+        print("Error updating payment:", e)
+        return jsonify({"message": "Error updating payment info"}), 500
 
 @app.route('/sms', methods=['POST'])
 def receive_sms():
