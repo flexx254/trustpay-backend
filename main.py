@@ -210,7 +210,7 @@ def check_payment():
 
         if message_response.data:
             # Matching message found, mark product as paid
-            supabase.table("products").update({"paid": True}).eq("id", product_id).execute()
+            supabase.table("products").update({"paid": True,"status":"paid-held"}).eq("id", product_id).execute()
 
             return jsonify({
                 "paid": True,
