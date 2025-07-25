@@ -170,20 +170,18 @@ def receive_sms():
         return jsonify({"status": "SMS stored"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-@app.route("/check-payment", methods=["POST"])
-def check_payment():
+@app.route("/check-payment-used", methods=["POST"])
+def check_payment_used():
     data = request.get_json()
     mpesa_number = data.get("mpesa_number")
 
     if not mpesa_number:
         return jsonify({"error": "M-Pesa number is required"}), 400
 
-    # Normalize the input number
     normalized_number = normalize_number(mpesa_number)
 
     try:
-        # Get the most recent unpaid product matching the normalized number
+        # Get the unpaid product
         product_response = (
             supabase.table("products")
             .select("*")
@@ -192,7 +190,6 @@ def check_payment():
             .limit(1)
             .execute()
         )
-
         product_data = product_response.data
 
         if not product_data:
@@ -201,30 +198,29 @@ def check_payment():
         product = product_data[0]
         product_id = product["id"]
 
-        # Check if there's a matching incoming message
-        message_response = (
+        # Search unused messages that contain last 9 digits of the number
+        sms_response = (
             supabase.table("sms_messages")
             .select("*")
-            .like("message", f"%{normalized_number[-9:]}%")  # match last 9 digits
+            .eq("used", False)
             .execute()
         )
+        messages = sms_response.data
 
-        if message_response.data:
-            # Matching message found, mark product as paid
-            update_response = (
-                supabase.table("products")
-                .update({"paid": True})
-                .eq("id", product_id)
-                .execute()
-            )
+        matched_msg = next((msg for msg in messages if normalized_number[-9:] in msg.get("message", "")), None)
 
-            return jsonify({"paid": True, "message": "Payment confirmed and product updated"}), 200
+        if matched_msg:
+            # Mark message as used
+            supabase.table("sms_messages").update({"used": True}).eq("id", matched_msg["id"]).execute()
+            # Mark product as paid
+            supabase.table("products").update({"paid": True}).eq("id", product_id).execute()
+
+            return jsonify({"paid": True, "message": "Payment confirmed and marked as used"}), 200
         else:
-            return jsonify({"paid": False, "message": "No matching payment message found yet"}), 200
+            return jsonify({"paid": False, "message": "No matching unused SMS message found"}), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
                             
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
