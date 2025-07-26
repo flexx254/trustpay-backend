@@ -91,12 +91,19 @@ def get_products():
     if not user_id:
         return jsonify({"error": "User ID is required"}), 400
 
+    def status_priority(status):
+        return {
+            "paid-released": 0,
+            "paid-held": 1
+        }.get(status, 2)  # pending or undefined = 2
+
     try:
-        response = supabase.table('products').select('*').eq('user_id', user_id).order('id', desc=True).execute()
-        return jsonify(response.data), 200
+        response = supabase.table('products').select('*').eq('user_id', user_id).execute()
+        products = response.data
+        sorted_products = sorted(products, key=lambda p: status_priority(p.get('status', '')))
+        return jsonify(sorted_products), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 @app.route('/product-details', methods=['GET'])
 def product_details():
     product_id = request.args.get('product_id')
