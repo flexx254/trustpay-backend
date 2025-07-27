@@ -230,8 +230,22 @@ def check_payment():
             }), 200
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
-                            
+        return jsonify({"error": str(e)}), 500 
+ @app.route('/check-payment-status', methods=['GET'])
+def check_payment_status():
+    product_id = request.args.get('product_id')
+    if not product_id:
+        return jsonify({"error": "Product ID is required"}), 400
+
+    try:
+        response = supabase.table('products').select('paid').eq('id', product_id).single().execute()
+        if response.data:
+            return jsonify({"paid": response.data['paid']}), 200
+        else:
+            return jsonify({"error": "Product not found"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500    
+        
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
     app.run(debug=False, host='0.0.0.0', port=port)
