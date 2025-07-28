@@ -203,7 +203,10 @@ def check_payment():
         product_data = product_response.data
 
         if not product_data:
-            return jsonify({"paid": False, "message": "No unpaid product found for this number"}), 200
+            return jsonify({
+                "paid": False,
+                "message": "No unpaid product found for this number"
+            }), 200
 
         product = product_data[0]
         product_id = product["id"]
@@ -217,12 +220,28 @@ def check_payment():
         )
 
         if message_response.data:
-            # Matching message found, mark product as paid
-            supabase.table("products").update({"paid": True,"status":"paid-held"}).eq("id", product_id).execute()
+            matched_msg = message_response.data[0]['message']
+
+            # Try extracting amount using regex (e.g., Ksh1234.00 or KES 1234)
+            amount_match = re.search(r'(?i)(?:KES|Ksh)\s?([0-9,]+(?:\.\d{1,2})?)', matched_msg)
+            if amount_match:
+                paid_amount = float(amount_match.group(1).replace(",", ""))
+            else:
+                paid_amount = None
+
+            update_data = {
+                "paid": True,
+                "status": "paid-held"
+            }
+            if paid_amount is not None:
+                update_data["amount_paid"] = paid_amount
+
+            supabase.table("products").update(update_data).eq("id", product_id).execute()
 
             return jsonify({
                 "paid": True,
-                "message": "Payment confirmed and product updated"
+                "message": "Payment confirmed and product updated",
+                "amount_paid": paid_amount
             }), 200
         else:
             return jsonify({
@@ -231,7 +250,7 @@ def check_payment():
             }), 200
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500 
+        return jsonify({"error": str(e)}), 500
  @app.route('/check-payment-status', methods=['GET'])
 def check_payment_status():
     product_id = request.args.get('product_id')
