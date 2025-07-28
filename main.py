@@ -150,7 +150,8 @@ def update_payment():
             "buyer_name": buyer_name,
             "buyer_email": buyer_email,
             "mpesa_number": mpesa_number,
-            "paid": False  # ✅ Set payment as false until SMS is confirmed
+            "paid": False, # ✅ Set payment as false until SMS is confirmed
+            "status":"pending"
         }).eq('id', product_id).execute()
 
         if response.data:
