@@ -222,10 +222,8 @@ def check_payment():
         if message_response.data:
             matched_msg = message_response.data[0]['message']
 
-         
-            
-            # Extract only the "received" amount using more specific pattern
-            amount_match = re.search(r"Ksh\s*([0-9,]+\.\d{2})", matched_msg, re.IGNORECASE)
+            # ✅ Fixed regex to support both "Ksh5.00" and "Ksh 5.00"
+            amount_match = re.search(r"Ksh\s*([\d,]+(?:\.\d{1,2})?)", matched_msg, re.IGNORECASE)
             if amount_match:
                 paid_amount = float(amount_match.group(1).replace(",", ""))
             else:
