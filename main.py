@@ -186,11 +186,21 @@ def check_payment():
     if not mpesa_number:
         return jsonify({"error": "M-Pesa number is required"}), 400
 
-    # Normalize the input number
+    # Updated normalization
+    def normalize_number(number):
+        number = number.strip().replace(" ", "").replace("+", "")
+        if number.startswith("0") and len(number) == 10:
+            return "254" + number[1:]
+        elif number.startswith("7") and len(number) == 9:
+            return "254" + number
+        elif number.startswith("254") and len(number) == 12:
+            return number
+        return number
+
     normalized_number = normalize_number(mpesa_number)
+    print("🔍 Normalized number:", normalized_number)
 
     try:
-        # Get the most recent unpaid product matching the normalized number
         product_response = (
             supabase.table("products")
             .select("*")
@@ -199,8 +209,8 @@ def check_payment():
             .limit(1)
             .execute()
         )
-
         product_data = product_response.data
+        print("📦 Matching unpaid product:", product_data)
 
         if not product_data:
             return jsonify({
@@ -211,23 +221,27 @@ def check_payment():
         product = product_data[0]
         product_id = product["id"]
 
-        # Check if there's a matching incoming message
+        # Check for matching SMS
         message_response = (
             supabase.table("sms_messages")
             .select("*")
-            .like("message", f"%{normalized_number[-9:]}%")  # match last 9 digits
+            .like("message", f"%{normalized_number[-9:]}%")
+            .order("id", desc=True)  # newest first
+            .limit(1)
             .execute()
         )
 
         if message_response.data:
             matched_msg = message_response.data[0]['message']
+            print("📨 Matched SMS:", matched_msg)
 
-            # ✅ Fixed regex to support both "Ksh5.00" and "Ksh 5.00"
+            # Extract amount using regex
             amount_match = re.search(r"Ksh\s*([\d,]+(?:\.\d{1,2})?)", matched_msg, re.IGNORECASE)
             if amount_match:
                 paid_amount = float(amount_match.group(1).replace(",", ""))
             else:
                 paid_amount = None
+            print("💰 Extracted amount:", paid_amount)
 
             update_data = {
                 "paid": True,
@@ -236,7 +250,8 @@ def check_payment():
             if paid_amount is not None:
                 update_data["amount_paid"] = paid_amount
 
-            supabase.table("products").update(update_data).eq("id", product_id).execute()
+            update_response = supabase.table("products").update(update_data).eq("id", product_id).execute()
+            print("📝 Update response:", update_response.data)
 
             return jsonify({
                 "paid": True,
@@ -250,6 +265,7 @@ def check_payment():
             }), 200
 
     except Exception as e:
+        print("❌ Error in check-payment:", e)
         return jsonify({"error": str(e)}), 500
  @app.route('/check-payment-status', methods=['GET'])
 def check_payment_status():
