@@ -186,7 +186,6 @@ def check_payment():
     if not mpesa_number:
         return jsonify({"error": "M-Pesa number is required"}), 400
 
-    # Updated normalization
     def normalize_number(number):
         number = number.strip().replace(" ", "").replace("+", "")
         if number.startswith("0") and len(number) == 10:
@@ -226,7 +225,7 @@ def check_payment():
             supabase.table("sms_messages")
             .select("*")
             .like("message", f"%{normalized_number[-9:]}%")
-            .order("id", desc=True)  # newest first
+            .order("id", desc=True)
             .limit(1)
             .execute()
         )
@@ -235,13 +234,21 @@ def check_payment():
             matched_msg = message_response.data[0]['message']
             print("📨 Matched SMS:", matched_msg)
 
-            # Extract amount using regex
-            amount_match = re.search(r"Ksh\s*([\d,]+(?:\.\d{1,2})?)", matched_msg, re.IGNORECASE)
-            if amount_match:
-                paid_amount = float(amount_match.group(1).replace(",", ""))
-            else:
-                paid_amount = None
-            print("💰 Extracted amount:", paid_amount)
+            # ✅ Extract amount using string method
+            def extract_amount_simple(msg):
+                if "Ksh" in msg:
+                    parts = msg.split("Ksh")
+                    if len(parts) > 1:
+                        after_ksh = parts[1].strip()
+                        amount_str = after_ksh.split(" ")[0].replace(",", "")
+                        try:
+                            return float(amount_str)
+                        except ValueError:
+                            return None
+                return None
+
+            paid_amount = extract_amount_simple(matched_msg)
+            print("💰 Extracted amount (string method):", paid_amount)
 
             update_data = {
                 "paid": True,
