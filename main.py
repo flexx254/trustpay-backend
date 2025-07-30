@@ -101,10 +101,10 @@ def get_products():
         # 🔹 Get the user’s products
         response = supabase.table("products").select("*").eq("user_id", user_id).execute()
         products = response.data or []
-        sorted_products = sorted(products, key=lambda p: status_priority(p.get('status', '')))
+        sorted_products = sorted(products, key=lambda p: p.get("timestampz") or "")
 
         # 🔹 Get all SMS messages once
-        sms_response = supabase.table("sms_messages").select("message").execute()
+        sms_response = supabase.table("sms_messages").select("message").order("timestampz", ascending=True).execute()
         sms_messages = [sms["message"] for sms in sms_response.data] if sms_response.data else []
 
         # 🔹 Function to extract amount from SMS
@@ -148,6 +148,8 @@ def normalize_number(number):
     elif number.startswith("7") and len(number) == 9:
         return "254" + number
     return number
+from datetime import datetime
+
 @app.route('/update-payment', methods=['POST'])
 def update_payment():
     data = request.get_json()
@@ -163,22 +165,32 @@ def update_payment():
     mpesa_number = normalize_number(mpesa_number)
 
     try:
-        response = supabase.table('products').update({
+        # Fetch original product to duplicate data
+        original = supabase.table("products").select("*").eq("id", product_id).single().execute()
+        if not original.data:
+            return jsonify({"message": "Product not found"}), 404
+
+        original_product = original.data
+
+        # Insert new row
+        new_data = {
+            "product_name": original_product["product_name"],
+            "amount": original_product["amount"],
+            "user_id": original_product["user_id"],
             "buyer_name": buyer_name,
             "buyer_email": buyer_email,
             "mpesa_number": mpesa_number,
-            "paid": False, # ✅ Set payment as false until SMS is confirmed
-            "status":"pending"
-        }).eq('id', product_id).execute()
+            "paid": False,
+            "status": "pending",
+            "timestampz": datetime.utcnow().isoformat()
+        }
 
-        if response.data:
-            return jsonify({"message": "Payment info updated. Waiting for confirmation."}), 200
-        else:
-            return jsonify({"message": "No product found with that ID"}), 404
+        supabase.table("products").insert(new_data).execute()
+
+        return jsonify({"message": "Payment info submitted successfully."}), 200
     except Exception as e:
-        print("Error updating payment:", e)
-        return jsonify({"message": "Error updating payment info"}), 500
-
+        print("Error in update-payment:", e)
+        return jsonify({"message": "Error submitting payment info."}), 500
 @app.route('/sms', methods=['POST'])
 def receive_sms():
     data = request.get_json()
@@ -202,7 +214,6 @@ def check_payment():
 
     if not mpesa_number:
         return jsonify({"error": "M-Pesa number is required"}), 400
-
     def normalize_number(number):
         number = number.strip().replace(" ", "").replace("+", "")
         if number.startswith("0") and len(number) == 10:
