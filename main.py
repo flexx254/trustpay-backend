@@ -95,27 +95,44 @@ def get_products():
         return {
             "paid-released": 0,
             "paid-held": 1
-        }.get(status, 2)  # pending or undefined = 2
+        }.get(status, 2)  # default = 2
 
     try:
-        response = supabase.table('products').select('*').eq('user_id', user_id).execute()
-        products = response.data
+        # 🔹 Get the user’s products
+        response = supabase.table("products").select("*").eq("user_id", user_id).execute()
+        products = response.data or []
         sorted_products = sorted(products, key=lambda p: status_priority(p.get('status', '')))
-        return jsonify(sorted_products), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-@app.route('/product-details', methods=['GET'])
-def product_details():
-    product_id = request.args.get('product_id')
-    if not product_id:
-        return jsonify({"error": "Product ID is required"}), 400
 
-    try:
-        response = supabase.table('products').select('*').eq('id', product_id).single().execute()
-        if response.data:
-            return jsonify(response.data), 200
-        else:
-            return jsonify({"error": "Product not found"}), 404
+        # 🔹 Get all SMS messages once
+        sms_response = supabase.table("sms_messages").select("message").execute()
+        sms_messages = [sms["message"] for sms in sms_response.data] if sms_response.data else []
+
+        # 🔹 Function to extract amount from SMS
+        def extract_paid_amount(msisdn):
+            if not msisdn:
+                return None
+            suffix = msisdn[-9:]
+            for msg in reversed(sms_messages):
+                if suffix in msg and "Ksh" in msg:
+                    try:
+                        after_ksh = msg.split("Ksh")[1].strip()
+                        amount_str = after_ksh.split(" ")[0].replace(",", "")
+                        return float(amount_str)
+                    except:
+                        continue
+            return None
+
+        # 🔹 Enrich each product with dynamic fields
+        for product in sorted_products:
+            paid_amount = extract_paid_amount(product.get("mpesa_number", ""))
+            product["amount_paid"] = paid_amount
+            try:
+                product["balance"] = round(paid_amount - float(product["amount"]), 2) if paid_amount is not None else None
+            except:
+                product["balance"] = None
+
+        return jsonify(sorted_products), 200
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
