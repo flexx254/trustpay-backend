@@ -149,48 +149,37 @@ def normalize_number(number):
         return "254" + number
     return number
 from datetime import datetime
-
-@app.route('/update-payment', methods=['POST'])
+@app.route("/update-payment", methods=["POST"])
 def update_payment():
     data = request.get_json()
-    product_id = data.get('product_id')
-    buyer_name = data.get('buyer_name')
-    buyer_email = data.get('buyer_email')
-    mpesa_number = data.get('mpesa_number')
 
-    if not product_id or not mpesa_number:
-        return jsonify({"message": "Missing product ID or phone number"}), 400
+    mpesa_number = data.get("mpesa_number")
+    product_name = data.get("product_name")
+    product_price = data.get("product_price")
+    amount_paid = data.get("amount_paid")
 
-    # Normalize the number before saving
-    mpesa_number = normalize_number(mpesa_number)
+    if not mpesa_number:
+        return jsonify({"error": "M-Pesa number is required"}), 400
 
-    try:
-        # Fetch original product to duplicate data
-        original = supabase.table("products").select("*").eq("id", product_id).single().execute()
-        if not original.data:
-            return jsonify({"message": "Product not found"}), 404
+    response = supabase.table("products").select("*").eq("mpesa_number", mpesa_number).execute()
+    products = response.data
 
-        original_product = original.data
+    if not products:
+        return jsonify({"error": "Product not found"}), 404
 
-        # Insert new row
-        new_data = {
-            "product_name": original_product["product_name"],
-            "amount": original_product["amount"],
-            "user_id": original_product["user_id"],
-            "buyer_name": buyer_name,
-            "buyer_email": buyer_email,
-            "mpesa_number": mpesa_number,
-            "paid": False,
-            "status": "pending",
-            "timestampz": datetime.utcnow().isoformat()
-        }
+    product_id = products[0]["id"]
 
-        supabase.table("products").insert(new_data).execute()
+    new_data = {
+        "product_name": product_name,
+        "product_price": product_price,
+        "amount_paid": amount_paid
+    }
 
-        return jsonify({"message": "Payment info submitted successfully."}), 200
-    except Exception as e:
-        print("Error in update-payment:", e)
-        return jsonify({"message": "Error submitting payment info."}), 500
+    supabase.table("products").update(new_data).eq("id", product_id).execute()
+    
+    # 👇 Do this right here
+    return jsonify({"message": "Product updated successfully"}), 200
+
 @app.route('/sms', methods=['POST'])
 def receive_sms():
     data = request.get_json()
@@ -302,21 +291,25 @@ def check_payment():
     except Exception as e:
         print("❌ Error in check-payment:", e)
         return jsonify({"error": str(e)}), 500
- @app.route('/check-payment-status', methods=['GET'])
+
+
+@app.route('/check-payment-status', methods=['GET'])
 def check_payment_status():
     product_id = request.args.get('product_id')
+
     if not product_id:
         return jsonify({"error": "Product ID is required"}), 400
 
     try:
         response = supabase.table('products').select('paid').eq('id', product_id).single().execute()
+
         if response.data:
             return jsonify({"paid": response.data['paid']}), 200
         else:
             return jsonify({"error": "Product not found"}), 404
+
     except Exception as e:
-        return jsonify({"error": str(e)}), 500    
-        
+        return jsonify({"error": str(e)}), 500
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
     app.run(debug=False, host='0.0.0.0', port=port)
