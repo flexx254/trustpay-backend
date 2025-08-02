@@ -1,15 +1,15 @@
-import os
-import re
 import bcrypt
-from datetime import datetime
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from supabase import create_client, Client
+import os
+import re
+from datetime import datetime
 
 app = Flask(__name__)
 CORS(app)
 
-# Supabase credentials from environment
+# Get Supabase credentials from environment
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 
@@ -24,7 +24,6 @@ def signup():
     email = data.get('email')
     phone = data.get('phone')
     raw_password = data.get('password')
-
     hashed_password = bcrypt.hashpw(raw_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
     try:
@@ -163,6 +162,7 @@ def update_payment():
             return jsonify({"message": "Product not found"}), 404
 
         original_product = original.data
+
         new_data = {
             "product_name": original_product["product_name"],
             "amount": original_product["amount"],
@@ -176,6 +176,7 @@ def update_payment():
         }
 
         supabase.table("products").insert(new_data).execute()
+
         return jsonify({"message": "Payment info submitted successfully."}), 200
     except Exception as e:
         print("Error in update-payment:", e)
@@ -193,6 +194,7 @@ def receive_sms():
         response = supabase.table('sms_messages').insert({
             "message": message
         }).execute()
+
         return jsonify({"status": "SMS stored"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -205,7 +207,18 @@ def check_payment():
     if not mpesa_number:
         return jsonify({"error": "M-Pesa number is required"}), 400
 
+    def normalize_number(number):
+        number = number.strip().replace(" ", "").replace("+", "")
+        if number.startswith("0") and len(number) == 10:
+            return "254" + number[1:]
+        elif number.startswith("7") and len(number) == 9:
+            return "254" + number
+        elif number.startswith("254") and len(number) == 12:
+            return number
+        return number
+
     normalized_number = normalize_number(mpesa_number)
+    print("🔍 Normalized number:", normalized_number)
 
     try:
         product_response = (
@@ -216,8 +229,9 @@ def check_payment():
             .limit(1)
             .execute()
         )
-
         product_data = product_response.data
+        print("📦 Matching unpaid product:", product_data)
+
         if not product_data:
             return jsonify({
                 "paid": False,
@@ -238,6 +252,7 @@ def check_payment():
 
         if message_response.data:
             matched_msg = message_response.data[0]['message']
+            print("📨 Matched SMS:", matched_msg)
 
             def extract_amount_simple(msg):
                 if "Ksh" in msg:
@@ -252,6 +267,7 @@ def check_payment():
                 return None
 
             paid_amount = extract_amount_simple(matched_msg)
+            print("💰 Extracted amount (string method):", paid_amount)
 
             update_data = {
                 "paid": True,
@@ -261,6 +277,7 @@ def check_payment():
                 update_data["amount_paid"] = paid_amount
 
             update_response = supabase.table("products").update(update_data).eq("id", product_id).execute()
+            print("📝 Update response:", update_response.data)
 
             return jsonify({
                 "paid": True,
@@ -274,6 +291,7 @@ def check_payment():
             }), 200
 
     except Exception as e:
+        print("❌ Error in check-payment:", e)
         return jsonify({"error": str(e)}), 500
 
 @app.route('/check-payment-status', methods=['GET'])
