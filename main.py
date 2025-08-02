@@ -103,6 +103,7 @@ def add_product():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+from datetime import datetime
 
 @app.route('/products', methods=['GET'])
 def get_products():
@@ -116,10 +117,18 @@ def get_products():
             "paid-held": 1
         }.get(status, 2)
 
+    def parse_ts(ts):
+        if not ts:
+            return datetime.min
+        try:
+            return datetime.fromisoformat(ts)
+        except:
+            return datetime.min
+
     try:
         response = supabase.table("products").select("*").eq("user_id", user_id).execute()
         products = response.data or []
-        sorted_products = sorted(products, key=lambda p: p.get("timestampz") or "")
+        sorted_products = sorted(products, key=lambda p: parse_ts(p.get("timestampz")))
 
         sms_response = supabase.table("sms_messages").select("message").order("timestampz", ascending=True).execute()
         sms_messages = [sms["message"] for sms in sms_response.data] if sms_response.data else []
@@ -127,6 +136,7 @@ def get_products():
         def extract_paid_amount(msisdn):
             if not msisdn:
                 return None
+            msisdn = str(msisdn)
             suffix = msisdn[-9:]
             for msg in reversed(sms_messages):
                 if suffix in msg and "Ksh" in msg:
@@ -134,7 +144,8 @@ def get_products():
                         after_ksh = msg.split("Ksh")[1].strip()
                         amount_str = after_ksh.split(" ")[0].replace(",", "")
                         return float(amount_str)
-                    except:
+                    except Exception as e:
+                        print("Error parsing message:", msg, e)
                         continue
             return None
 
@@ -142,13 +153,16 @@ def get_products():
             paid_amount = extract_paid_amount(product.get("mpesa_number", ""))
             product["amount_paid"] = paid_amount
             try:
-                product["balance"] = round(paid_amount - float(product["amount"]), 2) if paid_amount is not None else None
-            except:
+                amt = float(product.get("amount", 0))
+                product["balance"] = round(paid_amount - amt, 2) if paid_amount is not None else None
+            except Exception as e:
+                print("Error calculating balance for product:", product.get("id", "unknown"), e)
                 product["balance"] = None
 
         return jsonify(sorted_products), 200
 
     except Exception as e:
+        print("Server error:", e)
         return jsonify({"error": str(e)}), 500
 
 def normalize_number(number):
