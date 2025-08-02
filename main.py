@@ -65,7 +65,6 @@ def login():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 @app.route('/add-product', methods=['POST'])
 def add_product():
     data = request.get_json()
@@ -77,23 +76,30 @@ def add_product():
         return jsonify({"error": "Missing fields"}), 400
 
     try:
-        # Insert and return the inserted row using .select("*")
-        response = supabase.table('products').insert({
+        # Insert product without trying to select
+        insert_response = supabase.table('products').insert({
             "user_id": user_id,
             "product_name": product_name,
             "amount": amount
-        }).select("*").execute()
+        }).execute()
 
-        # Get inserted product (first in list)
-        inserted_product = response.data[0] if response.data else None
+        # Now fetch the latest inserted product for this user
+        query_response = supabase.table('products') \
+            .select("*") \
+            .eq("user_id", user_id) \
+            .order("id", desc=True) \
+            .limit(1) \
+            .execute()
+
+        inserted_product = query_response.data[0] if query_response.data else None
 
         if inserted_product:
             return jsonify({
                 "message": "Product added successfully!",
-                "product_id": inserted_product["id"]  # 🔗 this is used to generate the link
+                "product_id": inserted_product["id"]
             }), 200
         else:
-            return jsonify({"error": "Insert succeeded but no product data returned"}), 500
+            return jsonify({"error": "Could not retrieve inserted product"}), 500
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
