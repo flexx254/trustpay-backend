@@ -99,11 +99,13 @@ def add_product():
                 "product_id": inserted_product["id"]
             }), 200
         else:
-            return jsonify({"error": "Could not retrieve inserted product"}), 500
+            return jsonify({"error": "Could not retrieve inserted product"}), 50
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 from datetime import datetime
+from flask import request, jsonify
 
 @app.route('/products', methods=['GET'])
 def get_products():
@@ -122,22 +124,22 @@ def get_products():
             return datetime.min
         try:
             return datetime.fromisoformat(ts)
-        except:
+        except Exception:
             return datetime.min
 
     try:
-        # Get products for this user
-        response = supabase.table("products").select("*").eq("user_id", user_id).execute()
+        # ✅ Fetch products only for this seller
+        response = supabase.table("products").select(
+            "product_id, product_name, amount, status, buyer_name, mpesa_number, timestampz"
+        ).eq("user_id", user_id).execute()
+
         products = response.data or []
+        sorted_products = sorted(products, key=lambda p: parse_ts(p.get("timestampz")), reverse=True)
 
-        # Sort products by timestamp
-        sorted_products = sorted(products, key=lambda p: parse_ts(p.get("timestampz")))
-
-        # Get all SMS messages
+        # ✅ Fetch SMS messages for M-Pesa amount lookup
         sms_response = supabase.table("sms_messages").select("message").order("timestampz", ascending=True).execute()
         sms_messages = [sms["message"] for sms in sms_response.data] if sms_response.data else []
 
-        # Extract payment from SMS
         def extract_paid_amount(msisdn):
             if not msisdn:
                 return None
@@ -154,29 +156,26 @@ def get_products():
                         continue
             return None
 
-        # Calculate amount paid and balance
+        # ✅ Add amount_paid and balance to each product
+        result = []
         for product in sorted_products:
             paid_amount = extract_paid_amount(product.get("mpesa_number", ""))
-            product["amount_paid"] = paid_amount
             try:
                 amt = float(product.get("amount", 0))
-                product["balance"] = round(paid_amount - amt, 2) if paid_amount is not None else None
+                balance = round(paid_amount - amt, 2) if paid_amount is not None else None
             except Exception as e:
-                print("Error calculating balance for product:", product.get("id", "unknown"), e)
-                product["balance"] = None
+                print("Error calculating balance for product:", product.get("product_id", "unknown"), e)
+                balance = None
 
-        # ✅ SAFELY structure response so frontend works as expected
-        result = []
-        for r in sorted_products:
             result.append({
-                "id": r.get("id") or r.get("product_id"),  # Ensure 'id' always present
-                "product_name": r.get("product_name"),
-                "amount": r.get("amount"),
-                "status": r.get("status", "pending"),
-                "buyer_name": r.get("buyer_name"),
-                "mpesa_number": r.get("mpesa_number"),
-                "amount_paid": r.get("amount_paid"),
-                "balance": r.get("balance")
+                "id": product["product_id"],  # ✅ Use product_id for frontend link
+                "product_name": product["product_name"],
+                "amount": product["amount"],
+                "status": product.get("status", "pending"),
+                "buyer_name": product.get("buyer_name"),
+                "mpesa_number": product.get("mpesa_number"),
+                "amount_paid": paid_amount,
+                "balance": balance
             })
 
         return jsonify(result), 200
@@ -184,6 +183,18 @@ def get_products():
     except Exception as e:
         print("Server error:", e)
         return jsonify({"error": str(e)}), 500
+
+
+def normalize_number(number):
+    number = number.strip().replace(" ", "").replace("+", "")
+    if number.startswith("0") and len(number) == 10:
+        return "254" + number[1:]
+    elif number.startswith("254") and len(number) == 12:
+        return number
+    elif number.startswith("7") and len(number) == 9:
+        return "254" + number
+    return number
+
 @app.route('/update-payment', methods=['POST'])
 def update_payment():
     data = request.get_json()
