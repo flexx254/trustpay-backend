@@ -76,21 +76,22 @@ def add_product():
         return jsonify({"error": "Missing fields"}), 400
 
     try:
-        # Insert and get ID directly
+        # Insert and return inserted row immediately
         insert_response = supabase.table('products').insert({
             "user_id": user_id,
             "product_name": product_name,
             "amount": amount
-        }).execute()
+        }).select("id").execute()
 
         inserted_product = insert_response.data[0] if insert_response.data else None
 
         if inserted_product:
             return jsonify({
+                "message": "Product added successfully!",
                 "id": inserted_product["id"]
             }), 200
         else:
-            return jsonify({"error": "Insert succeeded but no data returned"}), 500
+            return jsonify({"error": "Could not retrieve inserted product"}), 500
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
