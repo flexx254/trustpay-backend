@@ -96,7 +96,7 @@ def add_product():
         if inserted_product:
             return jsonify({
                 "message": "Product added successfully!",
-                "product_id": inserted_product["id"]
+                "id": inserted_product["id"]
             }), 200
         else:
             return jsonify({"error": "Could not retrieve inserted product"}), 50
