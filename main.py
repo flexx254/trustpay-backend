@@ -65,36 +65,46 @@ def login(): I
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 @app.route('/add-product', methods=['POST'])
 def add_product():
-    data = request.get_json()
-    user_id = data.get('user_id')
-    product_name = data.get('product_name')
-    amount = data.get('amount')
-
-    if not all([user_id, product_name, amount]):
-        return jsonify({"error": "Missing fields"}), 400
-
     try:
-        # Insert and return inserted row immediately
-        insert_response = supabase.table('products').insert({
+        data = request.get_json()
+
+        # Extract fields
+        user_id = data.get('user_id')
+        product_name = data.get('product_name')
+        amount = data.get('amount')
+
+        # Validate presence
+        if not all([user_id, product_name, amount]):
+            return jsonify({"error": "Missing user_id, product_name, or amount"}), 400
+
+        # Optional: Validate amount is a number
+        try:
+            amount = float(amount)
+        except ValueError:
+            return jsonify({"error": "Amount must be a number"}), 400
+
+        # Insert into Supabase
+        response = supabase.table('products').insert({
             "user_id": user_id,
             "product_name": product_name,
             "amount": amount
         }).select("id").execute()
 
-        inserted_product = insert_response.data[0] if insert_response.data else None
-
-        if inserted_product:
+        # Check if insert returned data
+        if response.data and len(response.data) > 0:
             return jsonify({
                 "message": "Product added successfully!",
-                "id": inserted_product["id"]
+                "id": response.data[0]["id"]
             }), 200
         else:
-            return jsonify({"error": "Could not retrieve inserted product"}), 500
+            return jsonify({"error": "Insert failed or no ID returned"}), 500
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 from datetime import datetime
 from flask import request, jsonify
 @app.route('/products', methods=['GET'])
