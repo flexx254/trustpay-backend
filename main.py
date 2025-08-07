@@ -68,39 +68,28 @@ def login(): I
 
 @app.route('/add-product', methods=['POST'])
 def add_product():
+    data = request.get_json()
+    user_id = data.get('user_id')
+    product_name = data.get('product_name')
+    amount = data.get('amount')
+
+    if not all([user_id, product_name, amount]):
+        return jsonify({"error": "Missing fields"}), 400
+
     try:
-        data = request.get_json()
-
-        # Extract fields
-        user_id = data.get('user_id')
-        product_name = data.get('product_name')
-        amount = data.get('amount')
-
-        # Validate presence
-        if not all([user_id, product_name, amount]):
-            return jsonify({"error": "Missing user_id, product_name, or amount"}), 400
-
-        # Optional: Validate amount is a number
-        try:
-            amount = float(amount)
-        except ValueError:
-            return jsonify({"error": "Amount must be a number"}), 400
-
-        # Insert into Supabase
-        response = supabase.table('products').insert({
+        insert_response = supabase.table('products').insert({
             "user_id": user_id,
             "product_name": product_name,
             "amount": amount
         }).select("id").execute()
 
-        # Check if insert returned data
-        if response.data and len(response.data) > 0:
-            return jsonify({
-                "message": "Product added successfully!",
-                "id": response.data[0]["id"]
-            }), 200
+        print("Insert response:", insert_response)  # 👈 Add this line to see what's returned
+
+        if insert_response.data and len(insert_response.data) > 0:
+            inserted_id = insert_response.data[0]['id']
+            return jsonify({"message": "Product added successfully!", "id": inserted_id}), 200
         else:
-            return jsonify({"error": "Insert failed or no ID returned"}), 500
+            return jsonify({"error": "Insert failed or ID missing"}), 500
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
