@@ -76,34 +76,24 @@ def add_product():
         return jsonify({"error": "Missing fields"}), 400
 
     try:
-        # Insert product without trying to select
+        # Insert and get ID directly
         insert_response = supabase.table('products').insert({
             "user_id": user_id,
             "product_name": product_name,
             "amount": amount
         }).execute()
 
-        # Now fetch the latest inserted product for this user
-        query_response = supabase.table('products') \
-            .select("*") \
-            .eq("user_id", user_id) \
-            .order("id", desc=True) \
-            .limit(1) \
-            .execute()
-
-        inserted_product = query_response.data[0] if query_response.data else None
+        inserted_product = insert_response.data[0] if insert_response.data else None
 
         if inserted_product:
             return jsonify({
-                "message": "Product added successfully!",
                 "id": inserted_product["id"]
             }), 200
         else:
-            return jsonify({"error": "Could not retrieve inserted product"}), 50
+            return jsonify({"error": "Insert succeeded but no data returned"}), 500
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 from datetime import datetime
 from flask import request, jsonify
 @app.route('/products', methods=['GET'])
