@@ -68,28 +68,32 @@ def login(): I
 
 @app.route('/add-product', methods=['POST'])
 def add_product():
-    data = request.get_json()
-    user_id = data.get('user_id')
-    product_name = data.get('product_name')
-    amount = data.get('amount')
-
-    if not all([user_id, product_name, amount]):
-        return jsonify({"error": "Missing fields"}), 400
-
     try:
+        data = request.get_json()
+        user_id = data.get('user_id')
+        product_name = data.get('product_name')
+        amount = data.get('amount')
+
+        # Basic validation
+        if not user_id or not product_name or not amount:
+            return jsonify({"error": "Missing fields"}), 400
+
+        # Insert into Supabase
         insert_response = supabase.table('products').insert({
             "user_id": user_id,
             "product_name": product_name,
-            "amount": amount
-        }).select("id").execute()
-
-        print("Insert response:", insert_response)  # 👈 Add this line to see what's returned
+            "amount": amount,
+            "status": "pending"
+        }).execute()
 
         if insert_response.data and len(insert_response.data) > 0:
-            inserted_id = insert_response.data[0]['id']
-            return jsonify({"message": "Product added successfully!", "id": inserted_id}), 200
+            new_product = insert_response.data[0]
+            return jsonify({
+                "id": new_product['id'],
+                "message": "Product added successfully"
+            }), 201
         else:
-            return jsonify({"error": "Insert failed or ID missing"}), 500
+            return jsonify({"error": "Failed to insert product"}), 500
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
