@@ -65,6 +65,8 @@ def login(): I
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+# ---------------------- ADD PRODUCT ROUTE ----------------------
 @app.route('/add-product', methods=['POST'])
 def add_product():
     try:
@@ -77,49 +79,106 @@ def add_product():
         if not user_id or not product_name or not amount:
             return jsonify({"error": "Missing fields"}), 400
 
-        # Insert and return inserted row
-        insert_response = (
-            supabase.table('products')
-            .insert({
-                "user_id": user_id,
-                "product_name": product_name,
-                "amount": amount,
-                "status": "pending"
-            })
-            .select("*")  # ✅ ensures full inserted row is returned
-            .execute()
-        )
+        # Insert into Supabase and return full row for debugging
+        insert_response = supabase.table('products').insert({
+            "user_id": user_id,
+            "product_name": product_name,
+            "amount": amount,
+            "status": "pending"
+        }).select("*").execute()
 
-        if insert_response.data:
-            return jsonify(insert_response.data[0]), 201
+        # Debug log to server console
+        print("DEBUG insert_response:", insert_response)
+
+        # Check for Supabase-level error
+        if getattr(insert_response, "error", None):
+            return jsonify({"error": str(insert_response.error)}), 500
+
+        # Ensure we received data back
+        if insert_response.data and len(insert_response.data) > 0:
+            return jsonify(insert_response.data[0]), 201  # send full inserted row
         else:
-            return jsonify({"error": "Insert failed"}), 500
+            return jsonify({"error": "Failed to insert product or ID not returned"}), 500
 
     except Exception as e:
-        print("❌ Error in /add-product:", e)
+        print("Error in /add-product:", e)
         return jsonify({"error": str(e)}), 500
 
 
+# ---------------------- GET PRODUCTS ROUTE ----------------------
 @app.route('/products', methods=['GET'])
 def get_products():
     user_id = request.args.get('user_id')
     if not user_id:
         return jsonify({"error": "User ID is required"}), 400
 
-    try:
-        # Fetch all products for this user, newest first
-        response = (
-            supabase.table("products")
-            .select("*")
-            .eq("user_id", user_id)
-            .order("id", desc=True)
-            .execute()
-        )
+    def status_priority(status):
+        return {
+            "paid-released": 0,
+            "paid-held": 1
+        }.get(status, 2)
 
-        return jsonify(response.data or []), 200
+    def parse_ts(ts):
+        if not ts:
+            return datetime.min
+        try:
+            return datetime.fromisoformat(ts)
+        except Exception:
+            return datetime.min
+
+    try:
+        # ✅ Fetch products only for this user (seller)
+        response = supabase.table("products").select("*").eq("user_id", user_id).execute()
+        products = response.data or []
+
+        # ✅ Sort by latest timestamp
+        sorted_products = sorted(products, key=lambda p: parse_ts(p.get("timestampz")), reverse=True)
+
+        # ✅ Load SMS messages once for M-Pesa extraction
+        sms_response = supabase.table("sms_messages").select("message").order("timestampz", ascending=True).execute()
+        sms_messages = [sms["message"] for sms in sms_response.data] if sms_response.data else []
+
+        def extract_paid_amount(msisdn):
+            if not msisdn:
+                return None
+            msisdn = str(msisdn)
+            suffix = msisdn[-9:]
+            for msg in reversed(sms_messages):
+                if suffix in msg and "Ksh" in msg:
+                    try:
+                        after_ksh = msg.split("Ksh")[1].strip()
+                        amount_str = after_ksh.split(" ")[0].replace(",", "")
+                        return float(amount_str)
+                    except Exception as e:
+                        print("Error parsing message:", msg, e)
+                        continue
+            return None
+
+        result = []
+        for product in sorted_products:
+            paid_amount = extract_paid_amount(product.get("mpesa_number", ""))
+            try:
+                amt = float(product.get("amount", 0))
+                balance = round(paid_amount - amt, 2) if paid_amount is not None else None
+            except Exception as e:
+                print("Error calculating balance for product:", product.get("id", "unknown"), e)
+                balance = None
+
+            result.append({
+                "id": product["id"],  # ✅ Use correct UUID field
+                "product_name": product["product_name"],
+                "amount": product["amount"],
+                "status": product.get("status", "pending"),
+                "buyer_name": product.get("buyer_name"),
+                "mpesa_number": product.get("mpesa_number"),
+                "amount_paid": paid_amount,
+                "balance": balance
+            })
+
+        return jsonify(result), 200
 
     except Exception as e:
-        print("❌ Error in /products:", e)
+        print("Server error:", e)
         return jsonify({"error": str(e)}), 500
 
 @app.route('/update-payment', methods=['POST'])
