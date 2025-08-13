@@ -78,32 +78,30 @@ def add_product():
         if not user_id or not product_name or not amount:
             return jsonify({"error": "Missing fields"}), 400
 
-        # Insert into Supabase and force returning the id
+        # Insert into Supabase and return full row for debugging
         insert_response = supabase.table('products').insert({
             "user_id": user_id,
             "product_name": product_name,
             "amount": amount,
             "status": "pending"
-        }).select("id").execute()
+        }).select("*").execute()
 
-        # Check Supabase-level error
+        # Debug log to server console
+        print("DEBUG insert_response:", insert_response)
+
+        # Check for Supabase-level error
         if getattr(insert_response, "error", None):
-            # supabase client may place error info on .error
             return jsonify({"error": str(insert_response.error)}), 500
 
-        # Ensure we received the returned id
+        # Ensure we received data back
         if insert_response.data and len(insert_response.data) > 0:
-            new_product = insert_response.data[0]
-            return jsonify({
-                "id": new_product.get('id'),
-                "message": "Product added successfully"
-            }), 201
+            return jsonify(insert_response.data[0]), 201  # send full inserted row
         else:
             return jsonify({"error": "Failed to insert product or ID not returned"}), 500
 
     except Exception as e:
+        print("Error in /add-product:", e)
         return jsonify({"error": str(e)}), 500
-
 
 from datetime import datetime
 from flask import request, jsonify
