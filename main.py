@@ -101,6 +101,25 @@ def add_product():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/products', methods=['GET'])
+def get_products():
+    try:
+        user_id = request.args.get('user_id')
+        if not user_id:
+            return jsonify({"error": "Missing user_id"}), 400
+
+        # Fetch only the necessary columns
+        response = (
+            supabase.table('products')
+            .select('product_name, amount, user_id')
+            .eq('user_id', user_id)
+            .execute()
+        )
+
+        return jsonify(response.data), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 
 
