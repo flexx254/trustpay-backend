@@ -39,7 +39,7 @@ def signup():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/login', methods=['POST'])
-def login(): I
+def login(): 
     data = request.get_json()
     email = data.get('email')
     password = data.get('password')
@@ -63,7 +63,7 @@ def login(): I
         else:
             return jsonify({"error": "Invalid email or password."}), 401
 
-    except Exceptin as e:
+    except Exception as e:
         return jsonify({"error": str(e)}), 500
 # ===================== ADD PRODUCT ROUTE =====================
 @app.route('/add-product', methods=['POST'])
