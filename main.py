@@ -65,7 +65,8 @@ def login():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-@app.route("/add-product", methods=["POST"])
+# ===================== ADD PRODUCT ROUTE =====================
+@app.route('/add-product', methods=['POST'])
 def add_product():
     try:
         data = request.json
@@ -73,11 +74,10 @@ def add_product():
         product_name = data.get("product_name")
         amount = data.get("amount")
 
-        # Basic validation
         if not user_id or not product_name or not amount:
-            return jsonify({"error": "Missing fields"}), 400
+            return jsonify({"error": "Missing required fields"}), 400
 
-        # Insert product into Supabase
+        # Insert into Supabase
         insert_response = supabase.table("products").insert({
             "user_id": user_id,
             "product_name": product_name,
@@ -85,20 +85,12 @@ def add_product():
             "status": "pending"
         }).execute()
 
-        # Get inserted product (Supabase returns inserted row(s) in .data)
-        if not insert_response.data:
-            return jsonify({"error": "Insert failed"}), 500
-
-        product = insert_response.data[0]
-        product_id = product.get("id")
-
-        # Generate product link (your format)
-        link = f"https://trustpay.example.com/product/{product_id}"
-
-        return jsonify({
-            "message": "Product added successfully",
-            "link": link
-        }), 201
+        if insert_response.data:
+            return jsonify({
+                "message": "Product added successfully"
+            }), 201
+        else:
+            return jsonify({"error": "Failed to insert product"}), 500
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
