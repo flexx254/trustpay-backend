@@ -65,7 +65,7 @@ def login():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-@app.route('/add-product', methods=['POST'])
+@app.route("/add-product", methods=["POST"])
 def add_product():
     try:
         data = request.json
@@ -73,29 +73,32 @@ def add_product():
         product_name = data.get("product_name")
         amount = data.get("amount")
 
+        # Basic validation
         if not user_id or not product_name or not amount:
-            return jsonify({"error": "Missing required fields"}), 400
+            return jsonify({"error": "Missing fields"}), 400
 
-        # Sanitize product name for link
-        safe_name = re.sub(r'[^a-zA-Z0-9]+', '-', product_name.lower()).strip('-')
-        payment_link = f"https://trustpay.com/pay/{safe_name}-{amount}"
-
-        # Insert into Supabase
+        # Insert product into Supabase
         insert_response = supabase.table("products").insert({
             "user_id": user_id,
             "product_name": product_name,
             "amount": amount,
-            "status": "pending",
-            "payment_link": payment_link
-        }, returning="representation").execute()
+            "status": "pending"
+        }).execute()
 
-        if insert_response.data:
-            return jsonify({
-                "message": "Product added successfully",
-                "product": insert_response.data[0]
-            }), 201
-        else:
-            return jsonify({"error": "Failed to insert product"}), 500
+        # Get inserted product (Supabase returns inserted row(s) in .data)
+        if not insert_response.data:
+            return jsonify({"error": "Insert failed"}), 500
+
+        product = insert_response.data[0]
+        product_id = product.get("id")
+
+        # Generate product link (your format)
+        link = f"https://trustpay.example.com/product/{product_id}"
+
+        return jsonify({
+            "message": "Product added successfully",
+            "link": link
+        }), 201
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
