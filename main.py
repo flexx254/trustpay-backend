@@ -101,7 +101,7 @@ def get_products():
         if not user_id:
             return jsonify({"error": "Missing user_id"}), 400
 
-        # Fetch only the necessary columns
+        # Fetch only the necsary columns
         response = (
             supabase.table('products')
             .select('product_name, amount, user_id')
@@ -117,16 +117,18 @@ def get_products():
 def create_payment():
     try:
         data = request.get_json()
-        product_id = data.get("product_id")
+        user_id = data.get("user_id")
+        product_name = data.get("product_name")
+        amount = data.get("amount")
         buyer_name = data.get("buyer_name")
         buyer_email = data.get("buyer_email")
         mpesa_number = data.get("mpesa_number")
         status = data.get("status", "held")
 
-        if not product_id or not buyer_name or not buyer_email or not mpesa_number:
+        if not user_id or not product_name or not amount or not buyer_name or not buyer_email or not mpesa_number:
             return jsonify({"error": "Missing required fields"}), 400
 
-        # Normalize phone number (reuse function)
+        # Normalize phone number
         def normalize_number(number):
             number = number.strip().replace(" ", "").replace("+", "")
             if number.startswith("0") and len(number) == 10:
@@ -139,18 +141,11 @@ def create_payment():
 
         normalized_mpesa = normalize_number(mpesa_number)
 
-        # Get original product (to copy product_name, amount, user_id)
-        original = supabase.table("products").select("*").eq("id", product_id).single().execute()
-        if not original.data:
-            return jsonify({"error": "Product not found"}), 404
-
-        original_product = original.data
-
-        # Insert payment record
+        # Insert payment row
         insert_response = supabase.table("products").insert({
-            "product_name": original_product["product_name"],
-            "amount": original_product["amount"],
-            "user_id": original_product["user_id"],
+            "user_id": user_id,
+            "product_name": product_name,
+            "amount": amount,
             "buyer_name": buyer_name,
             "buyer_email": buyer_email,
             "mpesa_number": normalized_mpesa,
@@ -167,6 +162,7 @@ def create_payment():
     except Exception as e:
         print("❌ Error in create-payment:", e)
         return jsonify({"error": str(e)}), 500
+
 
 
 
