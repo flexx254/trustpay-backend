@@ -113,7 +113,60 @@ def get_products():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/create-payment', methods=['POST'])
+def create_payment():
+    try:
+        data = request.get_json()
+        product_id = data.get("product_id")
+        buyer_name = data.get("buyer_name")
+        buyer_email = data.get("buyer_email")
+        mpesa_number = data.get("mpesa_number")
+        status = data.get("status", "held")
 
+        if not product_id or not buyer_name or not buyer_email or not mpesa_number:
+            return jsonify({"error": "Missing required fields"}), 400
+
+        # Normalize phone number (reuse function)
+        def normalize_number(number):
+            number = number.strip().replace(" ", "").replace("+", "")
+            if number.startswith("0") and len(number) == 10:
+                return "254" + number[1:]
+            elif number.startswith("7") and len(number) == 9:
+                return "254" + number
+            elif number.startswith("254") and len(number) == 12:
+                return number
+            return number
+
+        normalized_mpesa = normalize_number(mpesa_number)
+
+        # Get original product (to copy product_name, amount, user_id)
+        original = supabase.table("products").select("*").eq("id", product_id).single().execute()
+        if not original.data:
+            return jsonify({"error": "Product not found"}), 404
+
+        original_product = original.data
+
+        # Insert payment record
+        insert_response = supabase.table("products").insert({
+            "product_name": original_product["product_name"],
+            "amount": original_product["amount"],
+            "user_id": original_product["user_id"],
+            "buyer_name": buyer_name,
+            "buyer_email": buyer_email,
+            "mpesa_number": normalized_mpesa,
+            "status": status,
+            "paid": False,
+            "timestampz": datetime.utcnow().isoformat()
+        }).execute()
+
+        if insert_response.data:
+            return jsonify({"message": "Payment created successfully"}), 201
+        else:
+            return jsonify({"error": "Failed to create payment"}), 500
+
+    except Exception as e:
+        print("❌ Error in create-payment:", e)
+        return jsonify({"error": str(e)}), 500
 
 
 
