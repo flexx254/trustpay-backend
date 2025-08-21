@@ -112,7 +112,6 @@ def get_products():
         return jsonify(response.data), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 @app.route('/create-payment', methods=['POST'])
 def create_payment():
     try:
@@ -125,6 +124,7 @@ def create_payment():
         mpesa_number = data.get("mpesa_number")
         status = data.get("status", "held")
 
+        # Validate required fields
         if not user_id or not product_name or not amount or not buyer_name or not buyer_email or not mpesa_number:
             return jsonify({"error": "Missing required fields"}), 400
 
@@ -141,27 +141,32 @@ def create_payment():
 
         normalized_mpesa = normalize_number(mpesa_number)
 
-        # Insert payment row
-        insert_response = supabase.table("products").insert({
+        # Insert payment into payments table
+        insert_response = supabase.table("payments").insert({
             "user_id": user_id,
             "product_name": product_name,
             "amount": amount,
             "buyer_name": buyer_name,
             "buyer_email": buyer_email,
             "mpesa_number": normalized_mpesa,
-            "status": status,
-            "paid": False,
+            "status": status,              # default "held"
+            "paid": False,                 # starts false
+            "amount_paid": 0,              # initially 0
             "timestampz": datetime.utcnow().isoformat()
         }).execute()
 
         if insert_response.data:
-            return jsonify({"message": "Payment created successfully"}), 201
+            return jsonify({
+                "message": "Payment created successfully",
+                "payment": insert_response.data[0]
+            }), 201
         else:
             return jsonify({"error": "Failed to create payment"}), 500
 
     except Exception as e:
         print("❌ Error in create-payment:", e)
         return jsonify({"error": str(e)}), 500
+
 
 
 @app.route('/sms', methods=['POST'])
