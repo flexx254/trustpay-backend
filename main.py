@@ -103,7 +103,7 @@ def get_products():
 
         # Fetch only the necsary columns
         response = (
-            supabase.table('products')
+            supabase.table('payments')
             .select('product_name, amount, user_id')
             .eq('user_id', user_id)
             .execute()
