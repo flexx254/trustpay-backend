@@ -296,6 +296,32 @@ def check_payment_status():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# ===================== PRODUCTS.HTML ROUTE =====================
+@app.route('/products-page', methods=['GET'])
+def get_products_page():
+    """
+    Special route used ONLY for products.html.
+    Returns the product list for a given user_id
+    without touching payments table.
+    """
+    try:
+        user_id = request.args.get('user_id')
+        if not user_id:
+            return jsonify({"error": "Missing user_id"}), 400
+
+        # Fetch products created by this user
+        response = (
+            supabase.table('products')
+            .select('id, product_name, amount, user_id, status')
+            .eq('user_id', user_id)
+            .execute()
+        )
+
+        return jsonify(response.data), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
     app.run(debug=False, host='0.0.0.0', port=port)
