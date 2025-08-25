@@ -321,7 +321,25 @@ def get_products_page():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+        
+@app.route('/buyer-transactions', methods=['GET'])
+def get_buyer_transactions():
+    try:
+        user_id = request.args.get('user_id')
+        if not user_id:
+            return jsonify({"error": "Missing user_id"}), 400
 
+        response = (
+            supabase.table('payments')
+            .select('id, product_name, amount, buyer_name, mpesa_number, amount_paid, status, user_id')
+            .eq('user_id', user_id)
+            .execute()
+        )
+
+        return jsonify(response.data), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
     app.run(debug=False, host='0.0.0.0', port=port)
