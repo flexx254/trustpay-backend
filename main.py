@@ -210,12 +210,13 @@ def check_payment():
     try:
         # 1️⃣ Look for unpaid payment
         payment_response = (
-            supabase.table("payments")
-            .select("*")
-            .eq("mpesa_number", normalized_number)
-            .eq("paid", False)
-            .limit(1)
-            .execute()
+             supabase.table("payments")
+             .select("*")
+             .eq("mpesa_number", normalized_number)
+             .eq("paid", False)
+             .order("timestampz", desc=True)   # ✅ latest by time
+             .limit(1)
+             .execute()
         )
         payment_data = payment_response.data
         print("📦 Matching unpaid payment:", payment_data)
