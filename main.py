@@ -208,15 +208,15 @@ def check_payment():
     print("🔍 Normalized number:", normalized_number)
 
     try:
-        # 1️⃣ Look for unpaid payment
+        # 1️⃣ Look for the latest unpaid payment
         payment_response = (
-             supabase.table("payments")
-             .select("*")
-             .eq("mpesa_number", normalized_number)
-             .eq("paid", False)
-             .order("timestampz", desc=True)   # ✅ latest by time
-             .limit(1)
-             .execute()
+            supabase.table("payments")
+            .select("*")
+            .eq("mpesa_number", normalized_number)
+            .eq("paid", False)
+            .order("timestampz", desc=True)   # ✅ latest by time
+            .limit(1)
+            .execute()
         )
         payment_data = payment_response.data
         print("📦 Matching unpaid payment:", payment_data)
@@ -230,18 +230,21 @@ def check_payment():
         payment = payment_data[0]
         payment_id = payment["id"]
 
-        # 2️⃣ Find SMS containing the number
+        # 2️⃣ Find latest unused SMS containing the number
         message_response = (
             supabase.table("sms_messages")
             .select("*")
             .like("message", f"%{normalized_number[-9:]}%")
+            .eq("used", False)  # ✅ only unused messages
             .order("id", desc=True)
             .limit(1)
             .execute()
         )
 
         if message_response.data:
-            matched_msg = message_response.data[0]['message']
+            sms_row = message_response.data[0]
+            sms_id = sms_row["id"]
+            matched_msg = sms_row["message"]
             print("📨 Matched SMS:", matched_msg)
 
             # 3️⃣ Extract amount from SMS
@@ -260,7 +263,10 @@ def check_payment():
             paid_amount = extract_amount_simple(matched_msg)
             print("💰 Extracted amount:", paid_amount)
 
-            # 4️⃣ Update payment as paid
+            # 4️⃣ Mark SMS as used
+            supabase.table("sms_messages").update({"used": True}).eq("id", sms_id).execute()
+
+            # 5️⃣ Update payment as paid
             update_data = {
                 "paid": True,
                 "status": "paid-held"
@@ -285,7 +291,7 @@ def check_payment():
         else:
             return jsonify({
                 "paid": False,
-                "message": "No matching payment message found yet"
+                "message": "No matching unused payment message found yet"
             }), 200
 
     except Exception as e:
