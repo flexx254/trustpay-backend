@@ -5,6 +5,9 @@ from supabase import create_client, Client
 import os
 import re
 from datetime import datetime
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 app = Flask(__name__)
 CORS(app)
