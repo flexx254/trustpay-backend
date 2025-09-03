@@ -208,6 +208,7 @@ def receive_sms():
         return jsonify({"status": "SMS stored"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 @app.route("/check-payment", methods=["POST"])
 def check_payment():
     data = request.get_json()
@@ -237,7 +238,7 @@ def check_payment():
             .select("*")
             .eq("mpesa_number", normalized_number)
             .eq("paid", False)
-            .order("timestampz", desc=True)   # ✅ latest by time
+            .order("timestampz", desc=True)
             .limit(1)
             .execute()
         )
@@ -252,13 +253,17 @@ def check_payment():
 
         payment = payment_data[0]
         payment_id = payment["id"]
+        expected_amount = float(payment.get("amount", 0))
+        buyer_email = payment.get("buyer_email")
+        buyer_name = payment.get("buyer_name")
+        product_name = payment.get("product_name")
 
         # 2️⃣ Find latest unused SMS containing the number
         message_response = (
             supabase.table("sms_messages")
             .select("*")
             .like("message", f"%{normalized_number[-9:]}%")
-            .eq("used", False)  # ✅ only unused messages
+            .eq("used", False)
             .order("id", desc=True)
             .limit(1)
             .execute()
@@ -297,13 +302,29 @@ def check_payment():
             if paid_amount is not None:
                 update_data["amount_paid"] = paid_amount
 
-            update_response = (
-                supabase.table("payments")
-                .update(update_data)
-                .eq("id", payment_id)
-                .execute()
-            )
-            print("📝 Update response:", update_response.data)
+            supabase.table("payments").update(update_data).eq("id", payment_id).execute()
+
+            # 6️⃣ Send email based on amount
+            if paid_amount is not None and buyer_email:
+                if paid_amount < expected_amount:
+                    subject = "Partial Payment Received"
+                    body = (
+                        f"Hello {buyer_name},\n\n"
+                        f"We received a payment of KES {paid_amount} for {product_name}, "
+                        f"but the expected amount was KES {expected_amount}.\n"
+                        f"Please clear the remaining balance.\n\n"
+                        f"Thank you,\nTrustPay Team"
+                    )
+                    send_email(buyer_email, subject, body)
+                else:
+                    subject = "Payment Successful"
+                    body = (
+                        f"Hello {buyer_name},\n\n"
+                        f"Your payment of KES {paid_amount} for {product_name} "
+                        f"has been received successfully.\n\n"
+                        f"Thank you for your purchase!\nTrustPay Team"
+                    )
+                    send_email(buyer_email, subject, body)
 
             return jsonify({
                 "paid": True,
@@ -339,7 +360,7 @@ def check_payment_status():
 @app.route('/products-page', methods=['GET'])
 def get_products_page():
     """
-    Special route used ONLY for products.html.
+    Specil route used ONLY for products.html.
     Returns the product list for a given user_id
     without touching payments table.
     """
