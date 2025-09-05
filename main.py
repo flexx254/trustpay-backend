@@ -332,7 +332,7 @@ def check_payment():
                         ).hexdigest()
 
                     token = generate_secure_token(str(payment_id))
-                    confirm_url = f"http://yourdomain.com/confirm-delivery/{payment_id}/{token}"
+                    confirm_url = f"https://trustpay-backend.onrender.com/confirm-delivery/{payment_id}/{token}"
 
                     subject = "Confirm Delivery"
                     body = f"""
