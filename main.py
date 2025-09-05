@@ -427,6 +427,46 @@ def get_buyer_transactions():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+
+from hashlib import sha256
+import hmac
+
+@app.route("/confirm-delivery/<payment_id>/<token>", methods=["GET"])
+def confirm_delivery(payment_id, token):
+    try:
+        SECRET_KEY = os.environ.get("SECRET_KEY", "supersecret")
+
+        # 🔐 Verify token
+        expected_token = hmac.new(
+            SECRET_KEY.encode(),
+            str(payment_id).encode(),
+            sha256
+        ).hexdigest()
+
+        if token != expected_token:
+            return "❌ Invalid or expired confirmation link.", 400
+
+        # ✅ Update payment status to paid-released
+        supabase.table("payments").update({
+            "status": "paid-released"
+        }).eq("id", payment_id).execute()
+
+        return """
+        <html>
+          <body style="font-family: Arial; text-align:center; margin-top:50px;">
+            <h2>✅ Delivery Confirmed</h2>
+            <p>Your delivery has been confirmed successfully. Funds have been released to the seller.</p>
+            <p>Thank you for using <b>TrustPay</b>!</p>
+          </body>
+        </html>
+        """, 200
+
+    except Exception as e:
+        print("❌ Error in confirm-delivery:", e)
+        return "An error occurred while confirming delivery.", 500
+    
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
     app.run(debug=False, host='0.0.0.0', port=port)
