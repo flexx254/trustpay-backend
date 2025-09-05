@@ -294,41 +294,68 @@ def check_payment():
             # 4️⃣ Mark SMS as used
             supabase.table("sms_messages").update({"used": True}).eq("id", sms_id).execute()
 
-            # 5️⃣ Update payment as paid
-            update_data = {
-                "paid": True,
-                "status": "paid-held"
-            }
+            # 5️⃣ Update payment as paid-held
+            update_data = {"paid": True, "status": "paid-held"}
             if paid_amount is not None:
                 update_data["amount_paid"] = paid_amount
 
             supabase.table("payments").update(update_data).eq("id", payment_id).execute()
 
-            # 6️⃣ Send email based on amount
+            # 6️⃣ Send email with confirm button
             if paid_amount is not None and buyer_email:
                 if paid_amount < expected_amount:
                     subject = "Partial Payment Received"
-                    body = (
-                        f"Hello {buyer_name},\n\n"
-                        f"We received a payment of KES {paid_amount} for {product_name}, "
-                        f"but the expected amount was KES {expected_amount}.\n"
-                        f"Please clear the remaining balance.\n\n"
-                        f"Thank you,\nTrustPay Team"
-                    )
+                    body = f"""
+                    <html>
+                      <body>
+                        <p>Hello {buyer_name},</p>
+                        <p>We received KES {paid_amount} for <b>{product_name}</b>, 
+                        but the expected amount was KES {expected_amount}.</p>
+                        <p>Please clear the balance.</p>
+                        <p>Thank you,<br>TrustPay Team</p>
+                      </body>
+                    </html>
+                    """
                     send_email(buyer_email, subject, body)
                 else:
-                    subject = "Payment Successful"
-                    body = (
-                        f"Hello {buyer_name},\n\n"
-                        f"Your payment of KES {paid_amount} for {product_name} "
-                        f"has been received successfully.\n\n"
-                        f"Thank you for your purchase!\nTrustPay Team"
-                    )
+                    # ✅ Payment matches expected amount → send confirm delivery button
+                    from hashlib import sha256
+                    import hmac
+
+                    SECRET_KEY = os.environ.get("SECRET_KEY", "supersecret")
+
+                    def generate_secure_token(payment_id: str):
+                        return hmac.new(
+                            SECRET_KEY.encode(),
+                            str(payment_id).encode(),
+                            sha256
+                        ).hexdigest()
+
+                    token = generate_secure_token(str(payment_id))
+                    confirm_url = f"http://yourdomain.com/confirm-delivery/{payment_id}/{token}"
+
+                    subject = "Confirm Delivery"
+                    body = f"""
+                    <html>
+                      <body>
+                        <p>Hello {buyer_name},</p>
+                        <p>Your payment of KES {paid_amount} for <b>{product_name}</b> has been received and is being held safely.</p>
+                        <p>Please confirm you have received your product:</p>
+                        <a href="{confirm_url}"
+                           style="padding:10px 20px; background-color:green; color:white; text-decoration:none; border-radius:5px;">
+                           ✅ Confirm Delivery
+                        </a>
+                        <p>Once confirmed, your seller will receive the funds.</p>
+                        <br>
+                        <p>Thank you,<br>TrustPay Team</p>
+                      </body>
+                    </html>
+                    """
                     send_email(buyer_email, subject, body)
 
             return jsonify({
                 "paid": True,
-                "message": "Payment confirmed and updated",
+                "message": "Payment confirmed (held), email sent to confirm delivery",
                 "amount_paid": paid_amount
             }), 200
 
