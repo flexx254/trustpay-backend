@@ -18,7 +18,7 @@ def send_email(to_email, subject, body):
     msg["To"] = to_email
     msg["Subject"] = subject
 
-    msg.attach(MIMEText(body, "plain"))
+    msg.attach(MIMEText(body, "html"))
 
     try:
         with smtplib.SMTP("smtp.gmail.com", 587) as server:
