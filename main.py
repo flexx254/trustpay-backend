@@ -475,6 +475,31 @@ def confirm_delivery(payment_id, token):
     except Exception as e:
         print("❌ Error in confirm-delivery:", e)
         return "An error occurred while confirming delivery.", 500
+
+
+@app.route("/pay-balance/<payment_id>", methods=["GET"])
+def pay_balance(payment_id):
+    try:
+        # Fetch payment
+        payment = supabase.table("payments").select("*").eq("id", payment_id).single().execute()
+        if not payment.data:
+            return "❌ Payment not found", 404
+
+        amount_due = float(payment.data["amount"]) - float(payment.data.get("amount_paid", 0))
+
+        return f"""
+        <html>
+          <body style="font-family: Arial; text-align:center; margin-top:50px;">
+            <h2>💳 Pay Your Balance</h2>
+            <p>You still owe <b>KES {amount_due}</b> for <b>{payment.data['product_name']}</b>.</p>
+            <p>Please complete payment via M-Pesa to <b>+2547XXXXXXXX</b>.</p>
+            <p>After paying, the system will automatically verify your SMS and update your status.</p>
+          </body>
+        </html>
+        """, 200
+    except Exception as e:
+        print("❌ Error in pay-balance:", e)
+        return "An error occurred while loading balance payment page.", 500
     
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
