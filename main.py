@@ -175,7 +175,7 @@ def create_payment():
             "status": status,              # default "held"
             "paid": False,                 # starts false
             "amount_paid": 0,              # initially 0
-            "timestampz": datetime.utcnow().isoformat()
+            "timestampz": datetime.utcnow().ioformat()
         }).execute()
 
         if insert_response.data:
@@ -208,7 +208,6 @@ def receive_sms():
         return jsonify({"status": "SMS stored"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 @app.route("/check-payment", methods=["POST"])
 def check_payment():
     data = request.get_json()
@@ -301,24 +300,33 @@ def check_payment():
 
             supabase.table("payments").update(update_data).eq("id", payment_id).execute()
 
-            # 6️⃣ Send email with confirm button
+            # 6️⃣ Send email
             if paid_amount is not None and buyer_email:
                 if paid_amount < expected_amount:
+                    # 🟠 Partial payment email with Pay Balance button
                     subject = "Partial Payment Received"
+                    balance = expected_amount - paid_amount
                     body = f"""
                     <html>
                       <body>
                         <p>Hello {buyer_name},</p>
                         <p>We received KES {paid_amount} for <b>{product_name}</b>, 
                         but the expected amount was KES {expected_amount}.</p>
-                        <p>Please clear the balance.</p>
+                        <p>You still owe <b>KES {balance}</b>.</p>
+                        <p>
+                          <a href="https://trustpay-backend.onrender.com/pay-balance/{payment_id}"
+                             style="padding:10px 20px; background-color:orange; color:white; text-decoration:none; border-radius:5px;">
+                             💳 Pay Balance
+                          </a>
+                        </p>
                         <p>Thank you,<br>TrustPay Team</p>
                       </body>
                     </html>
                     """
                     send_email(buyer_email, subject, body)
+
                 else:
-                    # ✅ Payment matches expected amount → send confirm delivery button
+                    # ✅ Full payment → send Confirm Delivery button
                     from hashlib import sha256
                     import hmac
 
@@ -355,7 +363,7 @@ def check_payment():
 
             return jsonify({
                 "paid": True,
-                "message": "Payment confirmed (held), email sent to confirm delivery",
+                "message": "Payment confirmed (held), email sent to buyer",
                 "amount_paid": paid_amount
             }), 200
 
@@ -368,6 +376,7 @@ def check_payment():
     except Exception as e:
         print("❌ Error in check-payment:", e)
         return jsonify({"error": str(e)}), 500
+
 @app.route('/check-payment-status', methods=['GET'])
 def check_payment_status():
     product_id = request.args.get('product_id')
