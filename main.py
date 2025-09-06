@@ -175,7 +175,7 @@ def create_payment():
             "status": status,              # default "held"
             "paid": False,                 # starts false
             "amount_paid": 0,              # initially 0
-            "timestampz": datetime.utcnow().ioformat()
+            "timestampz": datetime.utcnow().isoformat()
         }).execute()
 
         if insert_response.data:
