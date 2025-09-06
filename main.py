@@ -492,7 +492,7 @@ def pay_balance(payment_id):
           <body style="font-family: Arial; text-align:center; margin-top:50px;">
             <h2>💳 Pay Your Balance</h2>
             <p>You still owe <b>KES {amount_due}</b> for <b>{payment.data['product_name']}</b>.</p>
-            <p>Please complete payment via M-Pesa to <b>+2547XXXXXXXX</b>.</p>
+            <p>Please complete payment via M-Pesa to <b>+254728639425</b>.</p>
             <p>After paying, the system will automatically verify your SMS and update your status.</p>
           </body>
         </html>
