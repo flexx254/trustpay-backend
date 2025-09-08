@@ -8,6 +8,7 @@ from datetime import datetime
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from flask import Flask, request, jsonify, redirect
 
 def send_email(to_email, subject, body):
     sender_email = os.environ.get("EMAIL_USER")  # your Gmail
