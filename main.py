@@ -490,6 +490,19 @@ def pay_balance(payment_id):
     except Exception as e:
         print("❌ Error in pay-balance:", e)
         return "An error occurred while loading balance payment page.", 500
+
+@app.route("/release-payment/<payment_id>", methods=["POST"])
+def release_payment(payment_id):
+    try:
+        supabase.table("payments").update({
+            "status": "paid-released"
+        }).eq("id", payment_id).execute()
+
+        return jsonify({"message": "✅ Payment released successfully"}), 200
+    except Exception as e:
+        print("❌ Error in release-payment:", e)
+        return jsonify({"error": "Could not release payment"}), 500
+    
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
     app.run(debug=False, host='0.0.0.0', port=port)
