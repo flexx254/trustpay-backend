@@ -503,7 +503,54 @@ def release_payment(payment_id):
     except Exception as e:
         print("❌ Error in release-payment:", e)
         return jsonify({"error": "Could not release payment"}), 500
-    
+
+@app.route("/get-payment/<payment_id>", methods=["GET"])
+def get_payment(payment_id):
+    try:
+        response = supabase.table("payments").select("*").eq("id", payment_id).single().execute()
+        if response.data:
+            return jsonify(response.data), 200
+        else:
+            return jsonify({"error": "Payment not found"}), 404
+    except Exception as e:
+        print("❌ Error in get-payment:", e)
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/update-balance/<payment_id>", methods=["POST"])
+def update_balance(payment_id):
+    try:
+        data = request.get_json()
+        extra_paid = float(data.get("amount_paid", 0))
+
+        # Fetch payment first
+        payment = supabase.table("payments").select("*").eq("id", payment_id).single().execute()
+        if not payment.data:
+            return jsonify({"error": "Payment not found"}), 404
+
+        payment_data = payment.data
+        new_total_paid = float(payment_data.get("amount_paid", 0)) + extra_paid
+        expected_amount = float(payment_data.get("amount", 0))
+
+        status = "paid-held"
+        if new_total_paid >= expected_amount:
+            status = "paid-held"  # fully paid, still held
+
+        supabase.table("payments").update({
+            "amount_paid": new_total_paid,
+            "paid": new_total_paid >= expected_amount,
+            "status": status
+        }).eq("id", payment_id).execute()
+
+        return jsonify({
+            "message": "Balance updated successfully",
+            "new_amount_paid": new_total_paid,
+            "status": status
+        }), 200
+
+    except Exception as e:
+        print("❌ Error in update-balance:", e)
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
     app.run(debug=False, host='0.0.0.0', port=port)
