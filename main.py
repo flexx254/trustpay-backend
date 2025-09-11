@@ -173,7 +173,7 @@ def create_payment():
             "buyer_name": buyer_name,
             "buyer_email": buyer_email,
             "mpesa_number": normalized_mpesa,
-            "status": status,              # default "held"
+            "status": "Not paid",              # default "held"
             "paid": False,                 # starts false
             "amount_paid": 0,              # initially 0
             "timestampz": datetime.utcnow().isoformat()
