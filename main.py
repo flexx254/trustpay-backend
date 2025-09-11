@@ -146,7 +146,7 @@ def create_payment():
         buyer_name = data.get("buyer_name")
         buyer_email = data.get("buyer_email")
         mpesa_number = data.get("mpesa_number")
-        status = data.get("status", "held")
+        status = data.get("status", "Not paid")
 
         # Validate required fields
         if not user_id or not product_name or not amount or not buyer_name or not buyer_email or not mpesa_number:
