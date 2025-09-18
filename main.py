@@ -568,7 +568,7 @@ def update_payment(payment_id):
 
         # Calculate new paid amount (assume full balance is settled)
         new_paid = total_amount
-        status = "paid-released" if new_paid >= total_amount else "held"
+        status = "paid-held" if new_paid >= total_amount else "held"
 
         # Update row
         updated = supabase.table("payments").update({
