@@ -528,23 +528,66 @@ def update_balance(payment_id):
             return jsonify({"error": "Payment not found"}), 404
 
         payment_data = payment.data
+        buyer_email = payment_data.get("buyer_email")
+        buyer_name = payment_data.get("buyer_name")
+        product_name = payment_data.get("product_name")
+
         new_total_paid = float(payment_data.get("amount_paid", 0)) + extra_paid
         expected_amount = float(payment_data.get("amount", 0))
 
         status = "paid-held"
-        if new_total_paid >= expected_amount:
-            status = "paid-held"  # fully paid, still held
+        fully_paid = new_total_paid >= expected_amount
+        if fully_paid:
+            status = "paid-held"  # fully paid, still held until delivery confirm
 
+        # Update payment row
         supabase.table("payments").update({
             "amount_paid": new_total_paid,
-            "paid": new_total_paid >= expected_amount,
+            "paid": fully_paid,
             "status": status
         }).eq("id", payment_id).execute()
+
+        # ✅ If fully paid → send Confirm Delivery email
+        if fully_paid and buyer_email:
+            from hashlib import sha256
+            import hmac
+
+            SECRET_KEY = os.environ.get("SECRET_KEY", "supersecret")
+
+            def generate_secure_token(payment_id: str):
+                return hmac.new(
+                    SECRET_KEY.encode(),
+                    str(payment_id).encode(),
+                    sha256
+                ).hexdigest()
+
+            token = generate_secure_token(str(payment_id))
+            confirm_url = f"https://trustpay-backend.onrender.com/confirm-delivery/{payment_id}/{token}"
+
+            subject = "Confirm Delivery"
+            body = f"""
+            <html>
+              <body>
+                <p>Hello {buyer_name},</p>
+                <p>Your payment of KES {new_total_paid} for <b>{product_name}</b> has now been fully received and is being held safely.</p>
+                <p>Please confirm you have received your product:</p>
+                <a href="{confirm_url}"
+                   style="padding:10px 20px; background-color:green; color:white; text-decoration:none; border-radius:5px;">
+                   ✅ Confirm Delivery
+                </a>
+                <p>Once confirmed, your seller will receive the funds.</p>
+                <br>
+                <p>Thank you,<br>TrustPay Team</p>
+              </body>
+            </html>
+            """
+            send_email(buyer_email, subject, body)
 
         return jsonify({
             "message": "Balance updated successfully",
             "new_amount_paid": new_total_paid,
-            "status": status
+            "status": status,
+            "confirm_email_sent": fully_paid
         }), 200
 
     except Exception as e:
