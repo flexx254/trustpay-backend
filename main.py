@@ -173,7 +173,7 @@ def create_payment():
             "buyer_name": buyer_name,
             "buyer_email": buyer_email,
             "mpesa_number": normalized_mpesa,
-            "status": "Not paid",              # default "held"
+            "status": "Not paid",          # default "not paid"
             "paid": False,                 # starts false
             "amount_paid": 0,              # initially 0
             "timestampz": datetime.utcnow().isoformat()
@@ -183,12 +183,13 @@ def create_payment():
             return jsonify({
                 "message": "Payment created successfully",
                 "payment": insert_response.data[0]
-            }), 201        else:            return jsonify({"error": "Failed to create payment"}), 500
+            }), 201
+        else:
+            return jsonify({"error": "Failed to create payment"}), 500
 
     except Exception as e:
         print("❌ Error in create-payment:", e)
         return jsonify({"error": str(e)}), 500
-
 
 
 @app.route('/sms', methods=['POST'])
