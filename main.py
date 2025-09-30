@@ -205,18 +205,20 @@ def receive_sms():
             "message": message
         }).execute()
 
-        return jsonify({"status": "SMS stored"}), 200
+        return jsonify({"status": "SMS stoed"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+                        
 @app.route("/check-payment", methods=["POST"])
 def check_payment():
     data = request.get_json()
     mpesa_number = data.get("mpesa_number")
-    payment_id = data.get("payment_id")  # ✅ allow payment_id from bal.html
+    payment_id = data.get("payment_id")  # from bal.html
+    auth_token = data.get("auth_token")  # ✅ new for secure check
 
-    if not mpesa_number:
-        return jsonify({"error": "M-Pesa number is required"}), 400
+    if not mpesa_number and not payment_id:
+        return jsonify({"error": "M-Pesa number or Payment ID is required"}), 400
 
     # Normalize phone number
     def normalize_number(number):
@@ -229,12 +231,24 @@ def check_payment():
             return number
         return number
 
-    normalized_number = normalize_number(mpesa_number)
+    normalized_number = normalize_number(mpesa_number) if mpesa_number else None
     print("🔍 Normalized number:", normalized_number)
 
     try:
-        # 1️⃣ Look up payment by ID (bal.html) or fallback to number (pay.html)
-        if payment_id:
+        # 1️⃣ Secure lookup first: by ID + token
+        if payment_id and auth_token:
+            payment_response = (
+                supabase.table("payments")
+                .select("*")
+                .eq("id", payment_id)
+                .eq("auth_token", auth_token)  # ✅ enforce token check
+                .single()
+                .execute()
+            )
+            payment_data = [payment_response.data] if payment_response.data else []
+
+        # 2️⃣ Fallback lookup: by ID only (for older bal.html links)
+        elif payment_id:
             payment_response = (
                 supabase.table("payments")
                 .select("*")
@@ -243,6 +257,8 @@ def check_payment():
                 .execute()
             )
             payment_data = [payment_response.data] if payment_response.data else []
+
+        # 3️⃣ Legacy fallback: by phone number (pay.html flow)
         else:
             payment_response = (
                 supabase.table("payments")
@@ -260,7 +276,7 @@ def check_payment():
         if not payment_data:
             return jsonify({
                 "paid": False,
-                "message": "No unpaid payment found for this number"
+                "message": "No unpaid payment found for this request"
             }), 200
 
         payment = payment_data[0]
@@ -270,7 +286,7 @@ def check_payment():
         buyer_name = payment.get("buyer_name")
         product_name = payment.get("product_name")
 
-        # 2️⃣ Find latest unused SMS containing the number
+        # 4️⃣ Match latest unused SMS
         message_response = (
             supabase.table("sms_messages")
             .select("*")
@@ -287,7 +303,7 @@ def check_payment():
             matched_msg = sms_row["message"]
             print("📨 Matched SMS:", matched_msg)
 
-            # 3️⃣ Extract amount from SMS
+            # Extract amount
             def extract_amount_simple(msg):
                 if "Ksh" in msg:
                     parts = msg.split("Ksh")
@@ -303,10 +319,10 @@ def check_payment():
             paid_amount = extract_amount_simple(matched_msg)
             print("💰 Extracted amount:", paid_amount)
 
-            # 4️⃣ Mark SMS as used
+            # Mark SMS as used
             supabase.table("sms_messages").update({"used": True}).eq("id", sms_id).execute()
 
-            # 5️⃣ Update payment as paid-held (ACCUMULATE payments)
+            # Update payment
             update_data = {"paid": True, "status": "paid-held"}
             if paid_amount is not None:
                 old_paid = float(payment.get("amount_paid", 0))
@@ -317,17 +333,16 @@ def check_payment():
 
             supabase.table("payments").update(update_data).eq("id", payment_id).execute()
 
-            # 6️⃣ Send email
+            # Email handling
             if buyer_email:
                 if new_total_paid < expected_amount:
-                    # 🟠 Partial payment email with Pay Balance button
-                    subject = "Partial Payment Received"
                     balance = expected_amount - new_total_paid
+                    subject = "Partial Payment Received"
                     body = f"""
                     <html>
                       <body>
                         <p>Hello {buyer_name},</p>
-                        <p>We have received a total of <b>KES {new_total_paid}</b> for <b>{product_name}</b>, 
+                        <p>We have received <b>KES {new_total_paid}</b> for <b>{product_name}</b>, 
                         but the expected amount was KES {expected_amount}.</p>
                         <p>You still owe <b>KES {balance}</b>.</p>
                         <p>
@@ -341,12 +356,9 @@ def check_payment():
                     </html>
                     """
                     send_email(buyer_email, subject, body)
-
                 else:
-                    # ✅ Full payment → send Confirm Delivery button
                     from hashlib import sha256
                     import hmac
-
                     SECRET_KEY = os.environ.get("SECRET_KEY", "supersecret")
 
                     def generate_secure_token(payment_id: str):
@@ -393,7 +405,6 @@ def check_payment():
     except Exception as e:
         print("❌ Error in check-payment:", e)
         return jsonify({"error": str(e)}), 500
-
 
 @app.route('/check-payment-status', methods=['GET'])
 def check_payment_status():
