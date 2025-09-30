@@ -127,7 +127,7 @@ def get_products():
 
         # Fetch only the necsary columns
         response = (
-            supabase.table('payments')
+          supabase.table('payments')
             .select('product_name, amount, user_id')
             .eq('user_id', user_id)
             .execute()
@@ -136,6 +136,9 @@ def get_products():
         return jsonify(response.data), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+import secrets
+
 @app.route('/create-payment', methods=['POST'])
 def create_payment():
     try:
@@ -148,11 +151,11 @@ def create_payment():
         mpesa_number = data.get("mpesa_number")
         status = data.get("status", "Not paid")
 
-        # Validate required fields
+        # ✅ Validate required fields
         if not user_id or not product_name or not amount or not buyer_name or not buyer_email or not mpesa_number:
             return jsonify({"error": "Missing required fields"}), 400
 
-        # Normalize phone number
+        # ✅ Normalize phone number
         def normalize_number(number):
             number = number.strip().replace(" ", "").replace("+", "")
             if number.startswith("0") and len(number) == 10:
@@ -165,7 +168,10 @@ def create_payment():
 
         normalized_mpesa = normalize_number(mpesa_number)
 
-        # Insert payment into payments table
+        # ✅ Generate secure token
+        auth_token = secrets.token_hex(16)  # 32-char random hex string
+
+        # ✅ Insert payment into payments table
         insert_response = supabase.table("payments").insert({
             "user_id": user_id,
             "product_name": product_name,
@@ -173,16 +179,18 @@ def create_payment():
             "buyer_name": buyer_name,
             "buyer_email": buyer_email,
             "mpesa_number": normalized_mpesa,
-            "status": "Not paid",          # default "not paid"
-            "paid": False,                 # starts false
-            "amount_paid": 0,              # initially 0
+            "status": "Not paid",
+            "paid": False,
+            "amount_paid": 0,
+            "auth_token": auth_token,   # <-- store token
             "timestampz": datetime.utcnow().isoformat()
         }).execute()
 
         if insert_response.data:
             return jsonify({
                 "message": "Payment created successfully",
-                "payment": insert_response.data[0]
+                "payment": insert_response.data[0],
+                "token": auth_token    # <-- return token
             }), 201
         else:
             return jsonify({"error": "Failed to create payment"}), 500
@@ -190,8 +198,6 @@ def create_payment():
     except Exception as e:
         print("❌ Error in create-payment:", e)
         return jsonify({"error": str(e)}), 500
-
-
 @app.route('/sms', methods=['POST'])
 def receive_sms():
     data = request.get_json()
