@@ -658,7 +658,18 @@ def update_payment(payment_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
+@app.route("/debug_smtp")
+def debug_smtp():
+    import smtplib, time
+    start = time.time()
+    try:
+        s = smtplib.SMTP('smtp.gmail.com', 587, timeout=10)
+        s.starttls()
+        s.login("your_email@gmail.com", "your_app_password")
+        s.quit()
+        return f"✅ SMTP connected successfully in {round(time.time() - start, 2)}s"
+    except Exception as e:
+        return f"⚠️ SMTP error: {e}"
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
     app.run(debug=False, host='0.0.0.0', port=port)
