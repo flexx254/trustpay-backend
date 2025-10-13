@@ -660,12 +660,12 @@ def update_payment(payment_id):
 
 @app.route("/debug_smtp")
 def debug_smtp():
-    import smtplib, time
+    import os, smtplib, time
     start = time.time()
     try:
         s = smtplib.SMTP('smtp.gmail.com', 587, timeout=10)
         s.starttls()
-        s.login("EMAIL_USER", "EMAIL_PASS")
+        s.login(os.environ["EMAIL_USER"], os.environ["EMAIL_PASS"])
         s.quit()
         return f"✅ SMTP connected successfully in {round(time.time() - start, 2)}s"
     except Exception as e:
