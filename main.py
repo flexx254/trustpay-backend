@@ -665,7 +665,7 @@ def debug_smtp():
     try:
         s = smtplib.SMTP('smtp.gmail.com', 587, timeout=10)
         s.starttls()
-        s.login("your_email@gmail.com", "your_app_password")
+        s.login("EMAIL_USER", "EMAIL_PASS")
         s.quit()
         return f"✅ SMTP connected successfully in {round(time.time() - start, 2)}s"
     except Exception as e:
