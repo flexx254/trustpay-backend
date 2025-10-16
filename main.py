@@ -654,18 +654,15 @@ def update_payment(payment_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route("/debug_smtp")
-def debug_smtp():
-    import os, smtplib, time
+@app.route("/debug_sendgrid")
+def debug_sendgrid():
+    import time
     start = time.time()
     try:
-        s = smtplib.SMTP('smtp.gmail.com', 587, timeout=10)
-        s.starttls()
-        s.login(os.environ["EMAIL_USER"], os.environ["EMAIL_PASS"])
-        s.quit()
-        return f"✅ SMTP connected successfully in {round(time.time() - start, 2)}s"
+        send_email("your-test-email@example.com", "SendGrid Test", "<p>✅ SendGrid working!</p>")
+        return f"✅ SendGrid connected and email sent in {round(time.time() - start, 2)}s"
     except Exception as e:
-        return f"⚠️ SMTP error: {e}"
+        return f"⚠️ SendGrid error: {e}"
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
     app.run(debug=False, host='0.0.0.0', port=port)
