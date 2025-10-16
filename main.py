@@ -5,9 +5,8 @@ from supabase import create_client, Client
 import os
 import re
 from datetime import datetime
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail
 
 
 def send_email(to_email, subject, body):
