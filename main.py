@@ -8,26 +8,23 @@ from datetime import datetime
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 
-
 def send_email(to_email, subject, body):
-    sender_email = os.environ.get("EMAIL_USER")  # your Gmail
-    sender_pass = os.environ.get("EMAIL_PASS")  # your App Password
-
-    msg = MIMEMultipart()
-    msg["From"] = sender_email
-    msg["To"] = to_email
-    msg["Subject"] = subject
-
-    msg.attach(MIMEText(body, "html"))
-
+    """
+    Send an email using SendGrid API
+    """
     try:
-        with smtplib.SMTP("smtp.gmail.com", 587) as server:
-            server.starttls()
-            server.login(sender_email, sender_pass)
-            server.send_message(msg)
-        print(f"📧 Email sent to {to_email}")
+        message = Mail(
+            from_email="no-reply@trustpay.co.ke",  # your verified SendGrid sender
+            to_emails=to_email,
+            subject=subject,
+            html_content=body
+        )
+
+        sg = SendGridAPIClient(os.environ.get("trustpay-api-key"))
+        response = sg.send(message)
+        print(f"📧 Email sent to {to_email} | Status: {response.status_code}")
     except Exception as e:
-        print("❌ Email error:", e)
+        print("❌ SendGrid error:", e)
 
 app = Flask(__name__)
 CORS(app)
