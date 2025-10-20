@@ -20,7 +20,7 @@ def send_email(to_email, subject, body):
             html_content=body
         )
 
-        sg = SendGridAPIClient(os.environ.get("trustpay-api-key"))
+        sg = SendGridAPIClient(os.environ.get("SENDGRID_API_KEY"))
         response = sg.send(message)
         print(f"📧 Email sent to {to_email} | Status: {response.status_code}")
     except Exception as e:
