@@ -3,3 +3,4 @@ flask-cors
 supabase
 bcrypt
 requests
+sendgrid
