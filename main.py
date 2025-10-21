@@ -550,14 +550,13 @@ def get_payment(payment_id):
     except Exception as e:
         print("❌ Error in get-payment:", e)
         return jsonify({"error": str(e)}), 500
-
 @app.route("/update-balance/<payment_id>", methods=["POST"])
 def update_balance(payment_id):
     try:
         data = request.get_json()
-        extra_paid = float(data.get("amount_paid", 0))
+        extra_paid = float(data.get("amount_paid", 0))  # New payment only
 
-        # Fetch payment first
+        # Fetch payment record
         payment = supabase.table("payments").select("*").eq("id", payment_id).single().execute()
         if not payment.data:
             return jsonify({"error": "Payment not found"}), 404
@@ -567,22 +566,23 @@ def update_balance(payment_id):
         buyer_name = payment_data.get("buyer_name")
         product_name = payment_data.get("product_name")
 
-        new_total_paid = float(payment_data.get("amount_paid", 0)) + extra_paid
+        current_paid = float(payment_data.get("amount_paid", 0))
         expected_amount = float(payment_data.get("amount", 0))
 
-        status = "paid-held"
-        fully_paid = new_total_paid >= expected_amount
-        if fully_paid:
-            status = "paid-held"  # fully paid, still held until delivery confirm
+        # ✅ Only add the new payment portion
+        new_total_paid = current_paid + extra_paid
 
-        # Update payment row
+        fully_paid = new_total_paid >= expected_amount
+        status = "paid-held" if fully_paid else "partially-paid"
+
+        # Update Supabase record
         supabase.table("payments").update({
             "amount_paid": new_total_paid,
             "paid": fully_paid,
             "status": status
         }).eq("id", payment_id).execute()
 
-        # ✅ If fully paid → send Confirm Delivery email
+        # ✅ Send email only when fully paid
         if fully_paid and buyer_email:
             from hashlib import sha256
             import hmac
