@@ -329,6 +329,11 @@ def check_payment():
             if paid_amount is not None:
                 old_paid = float(payment.get("amount_paid", 0))
                 new_total_paid = old_paid + paid_amount
+
+                # ✅ Prevent overpayment (cap total)
+                if new_total_paid > expected_amount:
+                    new_total_paid = expected_amount
+
                 update_data["amount_paid"] = new_total_paid
             else:
                 new_total_paid = float(payment.get("amount_paid", 0))
