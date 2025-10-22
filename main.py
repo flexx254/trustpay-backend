@@ -217,7 +217,7 @@ def check_payment():
     data = request.get_json()
     mpesa_number = data.get("mpesa_number")
     payment_id = data.get("payment_id")  # from bal.html
-    auth_token = data.get("auth_token")  # ✅ new for secure check
+    auth_token = data.get("auth_token")  # ✅ for secure check
 
     if not mpesa_number and not payment_id:
         return jsonify({"error": "M-Pesa number or Payment ID is required"}), 400
@@ -243,7 +243,7 @@ def check_payment():
                 supabase.table("payments")
                 .select("*")
                 .eq("id", payment_id)
-                .eq("auth_token", auth_token)  # ✅ enforce token check
+                .eq("auth_token", auth_token)
                 .single()
                 .execute()
             )
@@ -265,20 +265,20 @@ def check_payment():
             payment_response = (
                 supabase.table("payments")
                 .select("*")
+                .or_("paid.eq.False,status.eq.partially-paid")  # ✅ also pick partial
                 .eq("mpesa_number", normalized_number)
-                .eq("paid", False)
                 .order("timestampz", desc=True)
                 .limit(1)
                 .execute()
             )
             payment_data = payment_response.data
 
-        print("📦 Matching unpaid payment:", payment_data)
+        print("📦 Matching unpaid/partial payment:", payment_data)
 
         if not payment_data:
             return jsonify({
                 "paid": False,
-                "message": "No unpaid payment found for this request"
+                "message": "No unpaid or partial payment found for this request"
             }), 200
 
         payment = payment_data[0]
@@ -299,115 +299,125 @@ def check_payment():
             .execute()
         )
 
-        if message_response.data:
-            sms_row = message_response.data[0]
-            sms_id = sms_row["id"]
-            matched_msg = sms_row["message"]
-            print("📨 Matched SMS:", matched_msg)
-
-            # Extract amount
-            def extract_amount_simple(msg):
-                if "Ksh" in msg:
-                    parts = msg.split("Ksh")
-                    if len(parts) > 1:
-                        after_ksh = parts[1].strip()
-                        amount_str = after_ksh.split(" ")[0].replace(",", "")
-                        try:
-                            return float(amount_str)
-                        except ValueError:
-                            return None
-                return None
-
-            paid_amount = extract_amount_simple(matched_msg)
-            print("💰 Extracted amount:", paid_amount)
-
-            # Mark SMS as used
-            supabase.table("sms_messages").update({"used": True}).eq("id", sms_id).execute()
-
-            # Update payment
-            update_data = {"paid": True, "status": "paid-held"}
-            if paid_amount is not None:
-                old_paid = float(payment.get("amount_paid", 0))
-                new_total_paid = old_paid + paid_amount
-
-                # ✅ Prevent overpayment (cap total)
-                if new_total_paid > expected_amount:
-                    new_total_paid = expected_amount
-
-                update_data["amount_paid"] = new_total_paid
-            else:
-                new_total_paid = float(payment.get("amount_paid", 0))
-
-            supabase.table("payments").update(update_data).eq("id", payment_id).execute()
-
-            # Email handling
-            if buyer_email:
-                if new_total_paid < expected_amount:
-                    balance = expected_amount - new_total_paid
-                    subject = "Partial Payment Received"
-                    body = f"""
-                    <html>
-                      <body>
-                        <p>Hello {buyer_name},</p>
-                        <p>We have received <b>KES {new_total_paid}</b> for <b>{product_name}</b>, 
-                        but the expected amount was KES {expected_amount}.</p>
-                        <p>You still owe <b>KES {balance}</b>.</p>
-                        <p>
-                          <a href="https://trustpay-backend.onrender.com/pay-balance/{payment_id}"
-                             style="padding:10px 20px; background-color:orange; color:white; text-decoration:none; border-radius:5px;">
-                             💳 Pay Balance
-                          </a>
-                        </p>
-                        <p>Thank you,<br>TrustPay Team</p>
-                      </body>
-                    </html>
-                    """
-                    send_email(buyer_email, subject, body)
-                else:
-                    from hashlib import sha256
-                    import hmac
-                    SECRET_KEY = os.environ.get("SECRET_KEY", "supersecret")
-
-                    def generate_secure_token(payment_id: str):
-                        return hmac.new(
-                            SECRET_KEY.encode(),
-                            str(payment_id).encode(),
-                            sha256
-                        ).hexdigest()
-
-                    token = generate_secure_token(str(payment_id))
-                    confirm_url = f"https://trustpay-backend.onrender.com/confirm-delivery/{payment_id}/{token}"
-
-                    subject = "Confirm Delivery"
-                    body = f"""
-                    <html>
-                      <body>
-                        <p>Hello {buyer_name},</p>
-                        <p>Your full payment of <b>KES {new_total_paid}</b> for <b>{product_name}</b> has been received and is being held safely.</p>
-                        <p>Please confirm you have received your product:</p>
-                        <a href="{confirm_url}"
-                           style="padding:10px 20px; background-color:green; color:white; text-decoration:none; border-radius:5px;">
-                           ✅ Confirm Delivery
-                        </a>
-                        <p>Once confirmed, your seller will receive the funds.</p>
-                        <br>
-                        <p>Thank you,<br>TrustPay Team</p>
-                      </body>
-                    </html>
-                    """
-                    send_email(buyer_email, subject, body)
-
-            return jsonify({
-                "paid": True,
-                "message": "Payment confirmed (held), email sent to buyer",
-                "amount_paid": new_total_paid
-            }), 200
-
-        else:
+        if not message_response.data:
             return jsonify({
                 "paid": False,
                 "message": "No matching unused payment message found yet"
             }), 200
+
+        sms_row = message_response.data[0]
+        sms_id = sms_row["id"]
+        matched_msg = sms_row["message"]
+        print("📨 Matched SMS:", matched_msg)
+
+        # --- Extract amount ---
+        def extract_amount_simple(msg):
+            if "Ksh" in msg:
+                parts = msg.split("Ksh")
+                if len(parts) > 1:
+                    after_ksh = parts[1].strip()
+                    amount_str = after_ksh.split(" ")[0].replace(",", "")
+                    try:
+                        return float(amount_str)
+                    except ValueError:
+                        return None
+            return None
+
+        paid_amount = extract_amount_simple(matched_msg)
+        print("💰 Extracted amount:", paid_amount)
+
+        # --- Mark SMS as used ---
+        supabase.table("sms_messages").update({"used": True}).eq("id", sms_id).execute()
+
+        # --- Update payment correctly ---
+        update_data = {}
+        if paid_amount is not None:
+            old_paid = float(payment.get("amount_paid", 0))
+            new_total_paid = old_paid + paid_amount
+
+            # ✅ Prevent overpayment
+            if new_total_paid > expected_amount:
+                new_total_paid = expected_amount
+
+            update_data["amount_paid"] = new_total_paid
+
+            # ✅ Update status correctly
+            if new_total_paid >= expected_amount:
+                update_data["paid"] = True
+                update_data["status"] = "paid-held"
+            else:
+                update_data["paid"] = False
+                update_data["status"] = "partially-paid"
+        else:
+            new_total_paid = float(payment.get("amount_paid", 0))
+
+        # --- Save to Supabase ---
+        supabase.table("payments").update(update_data).eq("id", payment_id).execute()
+
+        # --- Email logic ---
+        if buyer_email:
+            if new_total_paid < expected_amount:
+                balance = expected_amount - new_total_paid
+                subject = "Partial Payment Received"
+                body = f"""
+                <html>
+                  <body>
+                    <p>Hello {buyer_name},</p>
+                    <p>We have received <b>KES {new_total_paid}</b> for <b>{product_name}</b>, 
+                    but the expected amount was KES {expected_amount}.</p>
+                    <p>You still owe <b>KES {balance}</b>.</p>
+                    <p>
+                      <a href="https://trustpay-backend.onrender.com/pay-balance/{payment_id}"
+                         style="padding:10px 20px; background-color:orange; color:white; text-decoration:none; border-radius:5px;">
+                         💳 Pay Balance
+                      </a>
+                    </p>
+                    <p>Thank you,<br>TrustPay Team</p>
+                  </body>
+                </html>
+                """
+                send_email(buyer_email, subject, body)
+            else:
+                from hashlib import sha256
+                import hmac
+                SECRET_KEY = os.environ.get("SECRET_KEY", "supersecret")
+
+                def generate_secure_token(payment_id: str):
+                    return hmac.new(
+                        SECRET_KEY.encode(),
+                        str(payment_id).encode(),
+                        sha256
+                    ).hexdigest()
+
+                token = generate_secure_token(str(payment_id))
+                confirm_url = f"https://trustpay-backend.onrender.com/confirm-delivery/{payment_id}/{token}"
+
+                subject = "Confirm Delivery"
+                body = f"""
+                <html>
+                  <body>
+                    <p>Hello {buyer_name},</p>
+                    <p>Your full payment of <b>KES {new_total_paid}</b> for <b>{product_name}</b> has been received and is being held safely.</p>
+                    <p>Please confirm you have received your product:</p>
+                    <a href="{confirm_url}"
+                       style="padding:10px 20px; background-color:green; color:white; text-decoration:none; border-radius:5px;">
+                       ✅ Confirm Delivery
+                    </a>
+                    <p>Once confirmed, your seller will receive the funds.</p>
+                    <br>
+                    <p>Thank you,<br>TrustPay Team</p>
+                  </body>
+                </html>
+                """
+                send_email(buyer_email, subject, body)
+
+        return jsonify({
+            "paid": update_data.get("paid", False),
+            "status": update_data.get("status", "unknown"),
+            "message": "Payment updated successfully",
+            "amount_paid": update_data.get("amount_paid", 0),
+            "balance": expected_amount - update_data.get("amount_paid", 0)
+        }), 200
 
     except Exception as e:
         print("❌ Error in check-payment:", e)
