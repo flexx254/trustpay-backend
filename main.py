@@ -760,7 +760,112 @@ def get_payment(payment_id):
     except Exception as e:
         print("❌ Error in get-payment:", e)
         return jsonify({"error": str(e)}), 500
+
+
+
+
+
 @app.route("/update-balance/<payment_id>", methods=["POST"])
+def update_balance(payment_id):
+    try:
+        data = request.get_json()
+        extra_paid = float(data.get("amount_paid", 0))  # New installment
+
+        # --- Fetch payment record ---
+        payment = supabase.table("payments").select("*").eq("id", payment_id).single().execute()
+        if not payment.data:
+            return jsonify({"error": "Payment not found"}), 404
+
+        payment_data = payment.data
+        buyer_email = payment_data.get("buyer_email")
+        buyer_name = payment_data.get("buyer_name", "Customer")
+        product_name = payment_data.get("product_name", "Product")
+
+        current_paid = float(payment_data.get("amount_paid", 0))
+        expected_amount = float(payment_data.get("amount", 0))
+
+        # --- Add new installment ---
+        new_total_paid = current_paid + extra_paid
+        if new_total_paid > expected_amount:
+            new_total_paid = expected_amount  # prevent overpayment
+
+        fully_paid = new_total_paid >= expected_amount
+        status = "paid-held" if fully_paid else "partially-paid"
+
+        # --- Update Supabase record ---
+        supabase.table("payments").update({
+            "amount_paid": new_total_paid,
+            "paid": fully_paid,
+            "status": status
+        }).eq("id", payment_id).execute()
+
+        # --- Send email notifications ---
+        if buyer_email:
+            from hashlib import sha256
+            import hmac
+            SECRET_KEY = os.environ.get("SECRET_KEY", "supersecret")
+            def generate_secure_token(pid: str):
+                return hmac.new(SECRET_KEY.encode(), pid.encode(), sha256).hexdigest()
+
+            if fully_paid:
+                # ✅ Final payment: confirm delivery
+                token = generate_secure_token(str(payment_id))
+                confirm_url = f"https://trustpay-backend.onrender.com/confirm-delivery/{payment_id}/{token}"
+                subject = "Confirm Delivery of Your Purchase"
+                body = f"""
+                <html>
+                  <body>
+                    <p>Hello {buyer_name},</p>
+                    <p>Your total payment of <b>KES {new_total_paid}</b> for <b>{product_name}</b> has been fully received and is being held safely.</p>
+                    <p>Please confirm you have received your product:</p>
+                    <a href="{confirm_url}"
+                       style="padding:10px 20px; background-color:green; color:white; text-decoration:none; border-radius:5px;">
+                       ✅ Confirm Delivery
+                    </a>
+                    <p>Once confirmed, your seller will receive the funds.</p>
+                    <br>
+                    <p>Thank you,<br>TrustPay Team</p>
+                  </body>
+                </html>
+                """
+                send_email(buyer_email, subject, body)
+            else:
+                # 🔄 Partial payment: send "Pay Next Installment" email
+                remaining = round(expected_amount - new_total_paid, 2)
+                subject = "Installment Payment Received"
+                body = f"""
+                <html>
+                  <body>
+                    <p>Hello {buyer_name},</p>
+                    <p>We have received an additional payment of <b>KES {extra_paid}</b> for <b>{product_name}</b>.</p>
+                    <p>Total paid so far: <b>KES {new_total_paid}</b><br>
+                    Remaining balance: <b>KES {remaining}</b></p>
+                    <p>Please click below to make your next payment:</p>
+                    <a href="https://trustpay-backend.onrender.com/pay-balance/{payment_id}"
+                       style="padding:10px 20px; background-color:orange; color:white; text-decoration:none; border-radius:5px;">
+                       💳 Pay Next Installment
+                    </a>
+                    <br><br>
+                    <p>Thank you for using TrustPay.</p>
+                  </body>
+                </html>
+                """
+                send_email(buyer_email, subject, body)
+
+        return jsonify({
+            "message": "Payment updated successfully",
+            "new_total_paid": new_total_paid,
+            "status": status,
+            "confirm_email_sent": fully_paid
+        }), 200
+
+    except Exception as e:
+        print("❌ Error in update-balance:", e)
+        return jsonify({"error": str(e)}), 500
+
+
+        
+@app.route("/update/<payment_id>", methods=["POST"])
 def update_balance(payment_id):
     try:
         data = request.get_json()
