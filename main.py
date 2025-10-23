@@ -564,6 +564,108 @@ def get_payment(payment_id):
 def update_balance(payment_id):
     try:
         data = request.get_json()
+        extra_paid = float(data.get("amount_paid", 0))  # New payment portion
+
+        # Fetch payment record
+        payment = supabase.table("payments").select("*").eq("id", payment_id).single().execute()
+        if not payment.data:
+            return jsonify({"error": "Payment not found"}), 404
+
+        payment_data = payment.data
+        buyer_email = payment_data.get("buyer_email")
+        buyer_name = payment_data.get("buyer_name")
+        product_name = payment_data.get("product_name")
+
+        current_paid = float(payment_data.get("amount_paid", 0))
+        expected_amount = float(payment_data.get("amount", 0))
+
+        # ✅ Add new installment
+        new_total_paid = current_paid + extra_paid
+        if new_total_paid > expected_amount:
+            new_total_paid = expected_amount  # prevent overpay
+
+        fully_paid = new_total_paid >= expected_amount
+        status = "paid-held" if fully_paid else "partially-paid"
+
+        # ✅ Update Supabase record
+        supabase.table("payments").update({
+            "amount_paid": new_total_paid,
+            "paid": fully_paid,
+            "status": status
+        }).eq("id", payment_id).execute()
+
+        # ✅ Send email notifications
+        if buyer_email:
+            if not fully_paid:
+                balance = expected_amount - new_total_paid
+                subject = "Partial Payment Received"
+                body = f"""
+                <html>
+                  <body>
+                    <p>Hello {buyer_name},</p>
+                    <p>We have received an additional payment of <b>KES {extra_paid}</b> for <b>{product_name}</b>.</p>
+                    <p>Your total paid so far: <b>KES {new_total_paid}</b><br>
+                    Remaining balance: <b>KES {balance}</b>.</p>
+                    <p>Please click below to complete your payment:</p>
+                    <a href="https://trustpay-backend.onrender.com/pay-balance/{payment_id}"
+                       style="padding:10px 20px; background-color:orange; color:white; text-decoration:none; border-radius:5px;">
+                       💳 Pay Balance
+                    </a>
+                    <br><br>
+                    <p>Thank you,<br>TrustPay Team</p>
+                  </body>
+                </html>
+                """
+                send_email(buyer_email, subject, body)
+
+            else:
+                from hashlib import sha256
+                import hmac
+                SECRET_KEY = os.environ.get("SECRET_KEY", "supersecret")
+
+                def generate_secure_token(payment_id: str):
+                    return hmac.new(
+                        SECRET_KEY.encode(),
+                        str(payment_id).encode(),
+                        sha256
+                    ).hexdigest()
+
+                token = generate_secure_token(str(payment_id))
+                confirm_url = f"https://trustpay-backend.onrender.com/confirm-delivery/{payment_id}/{token}"
+
+                subject = "Confirm Delivery"
+                body = f"""
+                <html>
+                  <body>
+                    <p>Hello {buyer_name},</p>
+                    <p>Your total payment of <b>KES {new_total_paid}</b> for <b>{product_name}</b> has been fully received and is being held safely.</p>
+                    <p>Please confirm you have received your product:</p>
+                    <a href="{confirm_url}"
+                       style="padding:10px 20px; background-color:green; color:white; text-decoration:none; border-radius:5px;">
+                       ✅ Confirm Delivery
+                    </a>
+                    <p>Once confirmed, your seller will receive the funds.</p>
+                    <br>
+                    <p>Thank you,<br>TrustPay Team</p>
+                  </body>
+                </html>
+                """
+                send_email(buyer_email, subject, body)
+
+        return jsonify({
+            "message": "Payment updated successfully",
+            "new_total_paid": new_total_paid,
+            "status": status,
+            "confirm_email_sent": fully_paid
+        }), 200
+
+    except Exception as e:
+        print("❌ Error in update-balance:", e)
+        return jsonify({"error": str(e)}), 500       
+@app.route("/update-bala/<payment_id>", methods=["POST"])
+def update_balance(payment_id):
+    try:
+        data = request.get_json()
         extra_paid = float(data.get("amount_paid", 0))  # New payment only
 
         # Fetch payment record
