@@ -1230,8 +1230,45 @@ def update_balance(payment_id):
         print("❌ Error in update-balance:", e)
         return jsonify({"error": str(e)}), 500
 
-
 @app.route("/update-payment/<payment_id>", methods=["POST"])
+def update_payment(payment_id):
+    try:
+        data = request.json
+        mpesa_number = data.get("mpesa_number")
+        extra_paid = float(data.get("amount_paid", 0))  # new payment installment
+
+        # Fetch current payment row
+        payment = supabase.table("payments").select("*").eq("id", payment_id).single().execute()
+        if not payment.data:
+            return jsonify({"error": "Payment not found"}), 404
+
+        current_paid = float(payment.data.get("amount_paid", 0))
+        total_amount = float(payment.data["amount"])
+
+        # Add installment to total paid so far
+        new_paid = current_paid + extra_paid
+
+        # Cap it at total_amount (no overpay)
+        if new_paid > total_amount:
+            new_paid = total_amount
+
+        # Determine payment status
+        if round(new_paid, 2) < round(total_amount, 2):
+            status = "partially-paid"
+        else:
+            status = "paid-held"
+
+        # Update payment record
+        updated = supabase.table("payments").update({
+            "amount_paid": new_paid,
+            "status": status,
+            "mpesa_number": mpesa_number
+        }).eq("id", payment_id).execute()
+
+        return jsonify(updated.data[0]), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+@app.route("/update-pa/<payment_id>", methods=["POST"])
 def update_payment(payment_id):
     try:
         data = request.json
