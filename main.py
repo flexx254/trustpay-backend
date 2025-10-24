@@ -1230,7 +1230,7 @@ def update_balance(payment_id):
         print("❌ Error in update-balance:", e)
         return jsonify({"error": str(e)}), 500
 
-@app.route("/update-payment/<payment_id>", methods=["POST"])
+@app.route("/updy/<payment_id>", methods=["POST"])
 def update_payment(payment_id):
     try:
         data = request.json
