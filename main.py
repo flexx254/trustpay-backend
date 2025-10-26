@@ -541,7 +541,7 @@ def get_payment(payment_id):
 
 
 
-@app.route("/update-ba/<payment_id>", methods=["POST"])
+@app.route("/update-balance/<payment_id>", methods=["POST"])
 def update_balance(payment_id):
     try:
         data = request.get_json()
@@ -640,7 +640,7 @@ def update_balance(payment_id):
         return jsonify({"error": str(e)}), 500
 
         
-@app.route("/update-pay/<payment_id>", methods=["POST"])
+@app.route("/update-payment/<payment_id>", methods=["POST"])
 def update_payment(payment_id):
     try:
         data = request.json
@@ -681,7 +681,7 @@ def update_payment(payment_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route("/update-balance/<payment_id>", methods=["POST"])
+@app.route("/update-bala/<payment_id>", methods=["POST"])
 def update_balance(payment_id):
     try:
         data = request.get_json()
